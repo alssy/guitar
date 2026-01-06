@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Guitar Fretboard Trainer</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f4f4f9; padding: 20px; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn-group { margin: 10px 0; }
+        button { padding: 10px 15px; cursor: pointer; border: 1px solid #ddd; background: white; border-radius: 5px; }
+        button.active { background: #007bff; color: white; border-color: #0056b3; }
+        .display { font-size: 5rem; font-weight: bold; margin: 40px 0; color: #333; }
+        .timer { font-size: 1.2rem; color: #666; margin-bottom: 20px; }
+        .start-btn { background: #28a745; color: white; width: 100%; font-size: 1.5rem; border: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎸 지판 암기 트레이너</h1>
+
+    <div class="btn-group" id="note-group">
+        <button onclick="selectNote('C')">C</button>
+        <button onclick="selectNote('D')">D</button>
+        <button onclick="selectNote('E')">E</button>
+        <button onclick="selectNote('F')">F</button>
+        <button onclick="selectNote('G')">G</button>
+        <button onclick="selectNote('A')">A</button>
+        <button onclick="selectNote('B')">B</button>
+    </div>
+
+    <div class="btn-group" id="accidental-group">
+        <button onclick="selectAccidental('')">None</button>
+        <button onclick="selectAccidental('♯')">♯</button>
+        <button onclick="selectAccidental('♭')">♭</button>
+    </div>
+
+    <div style="margin: 20px 0;">
+        BPM: <input type="number" id="bpm" value="60" min="40" max="200" style="width: 50px;">
+        연습 시간: 
+        <select id="duration">
+            <option value="60">1분</option>
+            <option value="180">3분</option>
+            <option value="300">5분</option>
+        </select>
+    </div>
+
+    <hr>
+
+    <div class="timer" id="time-left">남은 시간: --:--</div>
+    <div class="display" id="string-display">READY</div>
+    <div id="note-display" style="font-size: 1.5rem; color: #007bff; font-weight: bold;">음계를 선택하세요</div>
+
+    <button class="start-btn" id="start-stop" onclick="toggleStart()">START</button>
+</div>
+
+<script>
+    let selectedNote = '';
+    let selectedAccidental = '';
+    let isRunning = false;
+    let intervalId = null;
+    let timerId = null;
+    let currentStep = 0;
+    const sequence = [6, 5, 4, 3, 2, 1, 2, 3, 4, 5]; // 상행 후 하행 순서
+
+    function selectNote(note) {
+        selectedNote = note;
+        updateDisplay();
+    }
+
+    function selectAccidental(acc) {
+        selectedAccidental = acc;
+        updateDisplay();
+    }
+
+    function updateDisplay() {
+        document.getElementById('note-display').innerText = `연습 목표: ${selectedNote}${selectedAccidental}`;
+    }
+
+    function toggleStart() {
+        if (isRunning) {
+            stopTrainer();
+        } else {
+            if (!selectedNote) return alert('음을 먼저 선택하세요!');
+            startTrainer();
+        }
+    }
+
+    function startTrainer() {
+        isRunning = true;
+        document.getElementById('start-stop').innerText = 'STOP';
+        document.getElementById('start-stop').style.background = '#dc3545';
+        
+        const bpm = document.getElementById('bpm').value;
+        const intervalTime = (60 / bpm) * 1000;
+        let timeLeft = parseInt(document.getElementById('duration').value);
+
+        // 메인 루프
+        intervalId = setInterval(() => {
+            document.getElementById('string-display').innerText = sequence[currentStep] + "번 줄";
+            currentStep = (currentStep + 1) % sequence.length;
+        }, intervalTime);
+
+        // 타이머 루프
+        timerId = setInterval(() => {
+            timeLeft--;
+            const min = Math.floor(timeLeft / 60);
+            const sec = timeLeft % 60;
+            document.getElementById('time-left').innerText = `남은 시간: ${min}:${sec < 10 ? '0'+sec : sec}`;
+            
+            if (timeLeft <= 0) stopTrainer();
+        }, 1000);
+    }
+
+    function stopTrainer() {
+        isRunning = false;
+        clearInterval(intervalId);
+        clearInterval(timerId);
+        document.getElementById('start-stop').innerText = 'START';
+        document.getElementById('start-stop').style.background = '#28a745';
+        document.getElementById('string-display').innerText = 'END';
+        currentStep = 0;
+    }
+</script>
+
+</body>
+</html>
