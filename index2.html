@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>기타 지판 연습기 - Minimal</title>
+    <title>기타 지판 연습기 - Minimal Dark</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -31,7 +31,6 @@
           const beatCountRef = useRef(0);
           const intervalRef = useRef(null);
 
-          // 로직상 0번 인덱스는 1번줄(E4), 5번 인덱스는 6번줄(E2)로 매핑
           const stringNotes = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2']; 
           const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
           const notesFlat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -70,7 +69,6 @@
             beatCountRef.current = 0;
             
             const targetName = getTargetNoteName();
-            // 6-5-4-3-2-1-1-2-3-4-5-6 연주 패턴 (줄 번호 기준)
             const stringPattern = [6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6]; 
             let patternStep = 0;
 
@@ -84,7 +82,7 @@
               if (beatCountRef.current === 5) Tone.Draw.schedule(() => startTimer(), time);
 
               const currentStringNum = stringPattern[patternStep];
-              const stringIdx = 6 - currentStringNum; // 6번줄 -> index 5, 1번줄 -> index 0
+              const stringIdx = 6 - currentStringNum; 
               
               let foundFret = -1;
               for (let f = 12; f >= 1; f--) {
@@ -123,7 +121,7 @@
             <div className="min-h-screen text-white p-4 md:p-8 font-sans">
               <div className="max-w-5xl mx-auto">
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-xl font-black text-blue-500 italic">FRETBOARD MASTER</h1>
+                    <h1 className="text-xl font-black text-slate-500 italic">FRETBOARD MASTER</h1>
                     {isPlaying && (
                         <div className="bg-slate-800 px-4 py-1 rounded-full border border-slate-700 font-mono text-xl font-bold">
                             {Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}
@@ -145,7 +143,7 @@
                     <button onClick={() => setAccidental(accidental === 'b' ? '' : 'b')} className={`flex-1 rounded-lg font-bold transition ${accidental === 'b' ? 'bg-green-600' : 'bg-slate-700'}`}>♭</button>
                   </div>
                   <div className="flex gap-2">
-                    <input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-1/2 bg-slate-900 p-2 rounded-lg text-center font-mono font-bold text-blue-400 border border-slate-700" />
+                    <input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-1/2 bg-slate-900 p-2 rounded-lg text-center font-mono font-bold text-blue-400 border border-slate-700 outline-none" />
                     <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="w-1/2 bg-slate-700 p-2 rounded-lg font-bold text-xs outline-none">
                       {[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} MIN</option>)}
                     </select>
@@ -156,15 +154,13 @@
                   </button>
                 </div>
 
-                <div className="bg-slate-800 p-6 md:p-10 rounded-3xl border border-slate-700 shadow-inner overflow-x-auto">
+                <div className="bg-slate-800 p-10 rounded-3xl border border-slate-700 shadow-inner overflow-x-auto">
                   <div className="min-w-[800px]">
-                    {/* 🔍 수정: index 0(1번줄)부터 index 5(6번줄)까지 순서대로 렌더링 */}
                     {[0, 1, 2, 3, 4, 5].map((stringIdx) => {
                       return (
                         <div key={stringIdx} className="relative h-12 flex items-center">
-                          {/* 🔍 수정: 왼쪽 String 텍스트 및 숫자 완전 삭제 */}
                           <div className="w-4"></div> 
-                          <div className="flex-1 h-[2px] bg-slate-600 relative">
+                          <div className="flex-1 h-[2px] bg-slate-700 relative">
                             {[...Array(12)].map((_, idx) => {
                               const fret = idx + 1;
                               const isCurrent = currentString === stringIdx && currentFret === fret;
@@ -174,11 +170,12 @@
                                 <div key={fret} className="absolute top-1/2 -translate-y-1/2" style={{left: `${((fret-1)/11)*100}%`}}>
                                   {isTarget && (
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center -translate-x-1/2 transition-all duration-150 
-                                      ${isCurrent ? 'bg-yellow-400 text-black scale-125 z-10 font-black shadow-[0_0_20px_rgba(250,204,21,0.7)]' : 'bg-slate-700/40 text-slate-500 border border-slate-600 font-bold opacity-20'}`}>
+                                      ${isCurrent ? 'bg-yellow-400 text-black scale-125 z-10 font-black shadow-[0_0_20px_rgba(250,204,21,0.7)]' : 'bg-slate-700/40 text-slate-500 border border-slate-700 font-bold opacity-20'}`}>
                                       {fret}
                                     </div>
                                   )}
-                                  <div className={`h-12 w-[1px] absolute -translate-x-1/2 mt-6 ${[3,5,7,9,12].includes(fret) ? 'bg-slate-500' : 'bg-slate-700/50'}`}></div>
+                                  {/* 🔍 파란색 선 제거: 이제 모든 세로선은 옅은 회색으로 통일 */}
+                                  <div className={`h-12 w-[1px] absolute -translate-x-1/2 mt-6 bg-slate-700/50`}></div>
                                 </div>
                               );
                             })}
@@ -187,7 +184,6 @@
                       )
                     })}
                   </div>
-                  {/* 프렛 번호만 하단에 깔끔하게 표시 */}
                   <div className="flex ml-4 mr-0 mt-8">
                     {[...Array(12)].map((_, i) => (
                       <div key={i} className="flex-1 text-center text-[10px] font-bold text-slate-600">{i + 1}</div>
