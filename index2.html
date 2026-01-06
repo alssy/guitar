@@ -3,12 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>기타 지판 연습기 - 1~12 Fret Only</title>
+    <title>기타 지판 연습기 - Clean View</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        @keyframes pulse-soft {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+        .animate-pulse-subtle { animation: pulse-soft 2s infinite; }
+    </style>
 </head>
 <body>
     <div id="root"></div>
@@ -31,6 +38,7 @@
           const beatCountRef = useRef(0);
           const intervalRef = useRef(null);
 
+          // 기타 줄 음 설정 (6번줄부터 1번줄 순서)
           const stringNotes = ['E2', 'A2', 'D3', 'G3', 'B3', 'E4']; 
           const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
           const notesFlat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -94,9 +102,8 @@
               }
 
               const stringIdx = stringPattern[patternStep] - 1;
-              
-              // 🔍 수정: 탐색 범위를 12부터 1까지만 설정 (0은 무시)
               let foundFret = -1;
+
               for (let f = 12; f >= 1; f--) {
                 const noteWithOctave = getNoteFromFret(stringIdx, f);
                 const nName = noteWithOctave.slice(0, -1);
@@ -142,11 +149,19 @@
           return (
             <div className="min-h-screen bg-slate-900 text-white p-8 font-sans">
               <div className="max-w-5xl mx-auto">
-                <h1 className="text-3xl font-black mb-8 text-center text-blue-400 tracking-tighter uppercase italic">Fretboard Master</h1>
+                <div className="flex justify-between items-center mb-8">
+                    <h1 className="text-2xl font-black text-blue-500 tracking-tighter italic">FRETBOARD MASTER</h1>
+                    {isPlaying && (
+                        <div className="flex items-center gap-4 bg-slate-800 px-6 py-2 rounded-full border border-slate-700 shadow-lg">
+                            <span className="text-xs font-bold text-blue-400 animate-pulse">{beatCountRef.current <= 4 ? "READY" : "PLAYING"}</span>
+                            <span className="text-2xl font-mono font-bold">{Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}</span>
+                        </div>
+                    )}
+                </div>
                 
                 <div className="bg-slate-800 p-6 rounded-2xl shadow-2xl mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 border border-slate-700">
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase">Note Selection</label>
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase">Note</label>
                     <div className="flex flex-wrap gap-1">
                       {['C','D','E','F','G','A','B'].map(n => (
                         <button key={n} onClick={() => setSelectedNote(n)} 
@@ -161,51 +176,35 @@
                       <button onClick={() => setAccidental(accidental === 'b' ? '' : 'b')} className={`flex-1 py-2 rounded-lg font-bold transition ${accidental === 'b' ? 'bg-green-600 ring-2 ring-green-400' : 'bg-slate-700'}`}>♭</button>
                     </div>
                   </div>
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div className="flex justify-between items-center bg-slate-900/50 p-2 rounded-lg border border-slate-700">
-                        <span className="text-xs font-bold text-slate-400 px-2 uppercase">BPM</span>
+                        <span className="text-xs font-bold text-slate-400 px-2">BPM</span>
                         <input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-16 bg-transparent text-right font-mono font-bold text-blue-400 outline-none" />
                     </div>
-                    <div>
-                      <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="w-full bg-slate-700 p-2 rounded-lg font-bold outline-none border border-slate-600 text-sm">
-                        {[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} MINUTE{m>1?'S':''}</option>)}
-                      </select>
-                    </div>
+                    <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="w-full bg-slate-700 p-2 rounded-lg font-bold outline-none border border-slate-600 text-sm">
+                      {[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} MIN</option>)}
+                    </select>
                   </div>
                   <div className="flex items-end">
                     <button onClick={isPlaying ? stopPractice : startPractice} 
-                      className={`w-full py-4 rounded-xl font-black text-xl transition-all duration-300 ${isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.4)]'}`}>
+                      className={`w-full py-4 rounded-xl font-black text-xl transition-all duration-300 ${isPlaying ? 'bg-red-500' : 'bg-blue-600 hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.4)]'}`}>
                       {isPlaying ? 'STOP' : 'START'}
                     </button>
                   </div>
                 </div>
 
-                {isPlaying && (
-                  <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-8 animate-pulse-subtle">
-                    <div className="flex justify-between items-center mb-4">
-                      <span className="text-blue-400 font-black uppercase text-xs tracking-widest">{beatCountRef.current <= 4 ? "Drum Stick Pre-beat..." : "Pattern Playing..."}</span>
-                      <span className="text-3xl font-mono font-bold text-white shadow-blue-500/50">{Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}</span>
-                    </div>
-                    <div className="w-full bg-slate-700 rounded-full h-4 overflow-hidden border border-slate-600 shadow-inner">
-                      <div 
-                        className={`h-full transition-all duration-1000 ease-linear ${beatCountRef.current <= 4 ? 'bg-slate-500' : 'bg-gradient-to-r from-blue-600 to-cyan-400'}`}
-                        style={{ width: `${(timeRemaining / (duration * 60)) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="bg-slate-800 p-8 rounded-2xl overflow-x-auto border border-slate-700 shadow-2xl relative">
+                {/* 지판 시각화 */}
+                <div className="bg-slate-800 p-10 rounded-3xl border border-slate-700 shadow-2xl relative">
                   <div className="min-w-[800px]">
-                    {[...Array(6)].map((_, i) => {
-                      const stringIdx = 5 - i; 
+                    {/* 🔍 수정: 줄 순서를 [0, 1, 2, 3, 4, 5] (1번줄~6번줄)로 맵핑 */}
+                    {[5, 4, 3, 2, 1, 0].map((stringIdx) => {
                       return (
-                        <div key={stringIdx} className="relative h-14 flex items-center">
-                          <div className="w-20 font-bold text-slate-500 text-[10px] uppercase tracking-tighter italic">String {stringIdx + 1}</div>
-                          <div className="flex-1 h-[3px] bg-slate-600 relative mx-4">
-                            {/* 🔍 수정: 0(개방현)을 제외하고 1번부터 12번 프렛만 렌더링 */}
+                        <div key={stringIdx} className="relative h-12 flex items-center group">
+                          {/* 🔍 수정: "String" 텍스트와 숫자 삭제 (빈 공간 유지) */}
+                          <div className="w-8 font-black text-slate-600 text-sm italic group-hover:text-blue-500 transition-colors"></div>
+                          <div className="flex-1 h-[2px] bg-gradient-to-r from-slate-700 via-slate-500 to-slate-700 relative">
                             {[...Array(12)].map((_, idx) => {
-                              const fret = idx + 1; // 1, 2, ..., 12
+                              const fret = idx + 1;
                               const isCurrent = currentString === stringIdx && currentFret === fret;
                               const noteName = getNoteFromFret(stringIdx, fret).slice(0,-1);
                               const isTarget = noteName === targetNoteDisplay || notesFlat[notes.indexOf(noteName)] === targetNoteDisplay;
@@ -213,11 +212,12 @@
                                 <div key={fret} className="absolute top-1/2 -translate-y-1/2" style={{left: `${((fret-1)/11)*100}%`}}>
                                   {isTarget && (
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center -translate-x-1/2 transition-all duration-200 
-                                      ${isCurrent ? 'bg-yellow-400 text-black scale-125 z-10 font-black shadow-[0_0_25px_rgba(250,204,21,0.8)]' : 'bg-slate-700/50 text-slate-400 border border-slate-500/50 font-bold opacity-30'}`}>
+                                      ${isCurrent ? 'bg-yellow-400 text-black scale-125 z-10 font-black shadow-[0_0_25px_rgba(250,204,21,0.8)]' : 'bg-slate-700/80 text-slate-400 border border-slate-600 font-bold opacity-20'}`}>
                                       {fret}
                                     </div>
                                   )}
-                                  <div className={`h-10 w-[2px] absolute -translate-x-1/2 mt-5 ${[3,5,7,9,12].includes(fret) ? 'bg-blue-500/40 shadow-[0_0_5px_rgba(59,130,246,0.5)]' : 'bg-slate-700/30'}`}></div>
+                                  {/* 프렛 라인 */}
+                                  <div className={`h-12 w-[1px] absolute -translate-x-1/2 mt-6 ${[3,5,7,9,12].includes(fret) ? 'bg-blue-500/50 w-[2px]' : 'bg-slate-700'}`}></div>
                                 </div>
                               );
                             })}
@@ -226,13 +226,25 @@
                       )
                     })}
                   </div>
-                  {/* 지판 하단 프렛 번호 표시 */}
-                  <div className="flex ml-24 mr-4 mt-6">
+                  {/* 하단 프렛 번호 */}
+                  <div className="flex ml-8 mr-0 mt-8">
                     {[...Array(12)].map((_, i) => (
-                      <div key={i} className="flex-1 text-center text-[10px] font-bold text-slate-500">{i + 1}</div>
+                      <div key={i} className="flex-1 text-center text-[11px] font-black text-slate-600">{i + 1}</div>
                     ))}
                   </div>
                 </div>
+
+                {/* 진행률 바 (하단으로 이동) */}
+                {isPlaying && (
+                  <div className="mt-8 px-2">
+                    <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
+                      <div 
+                        className="h-full bg-blue-600 transition-all duration-1000 ease-linear"
+                        style={{ width: `${(timeRemaining / (duration * 60)) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           );
