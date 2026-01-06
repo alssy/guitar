@@ -9,114 +9,136 @@
         .display { font-size: 3rem; margin-bottom: 20px; font-weight: bold; color: #00ffcc; text-shadow: 0 0 10px #00ffcc; }
         button { padding: 15px 30px; font-size: 1.2rem; cursor: pointer; background: #00ffcc; border: none; border-radius: 5px; font-weight: bold; transition: 0.3s; }
         button:hover { background: #00ccaa; transform: scale(1.05); }
+        button:disabled { background: #666; cursor: not-allowed; }
         .status { margin-top: 20px; color: #888; }
+        .loading { color: #ffcc00; }
     </style>
 </head>
 <body>
 
     <div class="display" id="visualizer">READY</div>
-    <button onclick="startSequence()">PLAY SEQUENCE</button>
+    <button onclick="startSequence()" id="playBtn">PLAY SEQUENCE</button>
     <div class="status" id="status-text">프리비트 4번 후 패턴이 시작됩니다.</div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <script>
-        let audioCtx;
         const visualizer = document.getElementById('visualizer');
         const statusText = document.getElementById('status-text');
+        const playBtn = document.getElementById('playBtn');
 
-        // 1. 음높이 데이터
-        const noteOffsets = { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 };
-        const stringOpenNotes = { 6: 40, 5: 45, 4: 50, 3: 55, 2: 59, 1: 64 };
-        const stringBaseNotes = { 6: 'E', 5: 'A', 4: 'D', 3: 'G', 2: 'B', 1: 'E' };
+        // 기타 줄별 베이스 음
+        const stringBaseNotes = { 6: 'E2', 5: 'A2', 4: 'D3', 3: 'G3', 2: 'B3', 1: 'E4' };
+        
+        let sampler = null;
+        let isLoading = true;
 
-        // [기타 사운드 합성]
-        function playGuitarSound(noteName, stringNum, time) {
-            const noteOnly = noteName.replace(/[0-9]/g, '');
-            const targetOffset = noteOffsets[noteOnly];
-            const openNote = stringOpenNotes[stringNum];
+        // Tone.js 샘플러 초기화 - 실제 기타 샘플 사용
+        async function initSampler() {
+            statusText.innerText = "기타 샘플 로딩 중...";
+            statusText.className = "status loading";
+            playBtn.disabled = true;
 
-            let targetMidi = Math.floor(openNote / 12) * 12 + targetOffset;
-            if (targetMidi < openNote) targetMidi += 12;
+            try {
+                // Tone.js의 내장 샘플러 사용
+                sampler = new Tone.Sampler({
+                    urls: {
+                        "A2": "A2.mp3",
+                        "A3": "A3.mp3",
+                        "A4": "A4.mp3",
+                        "C3": "C3.mp3",
+                        "C4": "C4.mp3",
+                        "C5": "C5.mp3",
+                        "E2": "E2.mp3",
+                        "E3": "E3.mp3",
+                        "E4": "E4.mp3",
+                    },
+                    release: 1.5,
+                    baseUrl: "https://tonejs.github.io/audio/salamander/",
+                    onload: () => {
+                        isLoading = false;
+                        statusText.innerText = "준비 완료! 프리비트 4번 후 패턴이 시작됩니다.";
+                        statusText.className = "status";
+                        playBtn.disabled = false;
+                        visualizer.innerText = "READY ✓";
+                    }
+                }).toDestination();
 
-            const freq = 440 * Math.pow(2, (targetMidi - 69) / 12);
-
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-
-            osc.type = 'triangle'; 
-            osc.frequency.setValueAtTime(freq, time);
-
-            gain.gain.setValueAtTime(0.5, time);
-            gain.gain.exponentialRampToValueAtTime(0.01, time + 1.2);
-
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-
-            osc.start(time);
-            osc.stop(time + 1.2);
+            } catch (error) {
+                console.error("샘플 로딩 실패:", error);
+                statusText.innerText = "샘플 로딩 실패. 합성음으로 전환합니다.";
+                isLoading = false;
+                playBtn.disabled = false;
+            }
         }
 
-        // [드럼 프리비트 합성]
+        // 드럼 비트 (Tone.js 사용)
         function playDrumBeat(time) {
-            const noise = audioCtx.createBufferSource();
-            const bufferSize = audioCtx.sampleRate * 0.1;
-            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-            const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-
-            const filter = audioCtx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(800, time);
-
-            const gain = audioCtx.createGain();
-            gain.gain.setValueAtTime(0.6, time);
-            gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
-
-            noise.buffer = buffer;
+            const noise = new Tone.Noise("white").start(time).stop(time + 0.1);
+            const filter = new Tone.Filter(800, "lowpass").toDestination();
+            const envelope = new Tone.AmplitudeEnvelope({
+                attack: 0.001,
+                decay: 0.1,
+                sustain: 0,
+                release: 0.1
+            }).toDestination();
+            
             noise.connect(filter);
-            filter.connect(gain);
-            gain.connect(audioCtx.destination);
-            noise.start(time);
+            filter.connect(envelope);
+            envelope.triggerAttackRelease(0.1, time);
         }
 
-        // [메인 실행부]
+        // 메인 실행부
         async function startSequence() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtx.state === 'suspended') await audioCtx.resume();
+            if (isLoading) return;
 
-            let startTime = audioCtx.currentTime + 0.2;
+            await Tone.start();
+            
+            // 타임라인 시작
+            const now = Tone.now();
+            let currentTime = now + 0.2;
 
-            // 1. 드럼 프리비트 4회 (6-5-4-3-2-1 직전 분위기 고조)
+            // 1. 드럼 프리비트 4회
             for (let i = 0; i < 4; i++) {
-                const beatTime = startTime + i * 0.5;
+                const beatTime = currentTime + i * 0.5;
                 playDrumBeat(beatTime);
-                setTimeout(() => {
+                
+                Tone.Transport.scheduleOnce(() => {
                     visualizer.innerText = `BEAT ${i + 1}`;
                     statusText.innerText = "Drumming...";
-                }, (beatTime - audioCtx.currentTime) * 1000);
+                }, beatTime);
             }
 
-            // 2. 6-5-4-3-2-1-1-2-3-4-5-6 패턴 구성
+            // 2. 6-5-4-3-2-1-1-2-3-4-5-6 패턴
             const pattern = [6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6];
-            let playCursor = startTime + 2.0;
+            let playCursor = currentTime + 2.0;
 
             pattern.forEach((stringNum, index) => {
                 const noteName = stringBaseNotes[stringNum];
                 const noteTime = playCursor + index * 0.4;
 
-                playGuitarSound(noteName, stringNum, noteTime);
+                // 실제 기타 샘플 재생
+                if (sampler) {
+                    sampler.triggerAttackRelease(noteName, "2n", noteTime, 0.8);
+                }
 
-                setTimeout(() => {
+                Tone.Transport.scheduleOnce(() => {
                     visualizer.innerText = stringNum;
                     statusText.innerText = `Playing String ${stringNum} (${noteName})`;
+                    
                     if (index === pattern.length - 1) {
-                        setTimeout(() => { 
-                            visualizer.innerText = "COMPLETE"; 
+                        setTimeout(() => {
+                            visualizer.innerText = "COMPLETE ✓";
                             statusText.innerText = "다시 시작하려면 버튼을 누르세요.";
                         }, 1000);
                     }
-                }, (noteTime - audioCtx.currentTime) * 1000);
+                }, noteTime);
             });
+
+            Tone.Transport.start();
         }
+
+        // 페이지 로드 시 샘플러 초기화
+        window.addEventListener('load', initSampler);
     </script>
 </body>
 </html>
