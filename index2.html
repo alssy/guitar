@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>기타 지판 연습기 - Pro</title>
+    <title>기타 지판 연습기 - 1~12 Fret Only</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -17,7 +17,7 @@
 
         const GuitarFretboardTrainer = () => {
           const [selectedNote, setSelectedNote] = useState('C');
-          const [accidental, setAccidental] = useState(''); // '', '#', 'b'
+          const [accidental, setAccidental] = useState('');
           const [bpm, setBpm] = useState(60);
           const [duration, setDuration] = useState(1);
           const [isPlaying, setIsPlaying] = useState(false);
@@ -41,7 +41,6 @@
               envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
             }).toDestination();
 
-            // 스틱 부딪히는 소리를 위한 설정
             stickRef.current = new Tone.MembraneSynth({
               pitchDecay: 0.001,
               octaves: 0.1,
@@ -61,7 +60,6 @@
             return notes[newNoteIndex] + (octave + octaveShift);
           };
 
-          // 샵/플랫이 반영된 정확한 타겟 음 이름 가져오기
           const getTargetNoteName = () => {
             let fullNote = selectedNote + accidental;
             if (fullNote === 'E#' ) return 'F';
@@ -87,37 +85,29 @@
               beatCountRef.current++;
               
               if (beatCountRef.current <= 4) {
-                // 🥁 스틱 소리 (프리비트)
                 stickRef.current.triggerAttackRelease('A5', '32n', time, 1.0);
                 return;
               }
 
-              // 실제 연습 시작 시점에 타이머 작동을 위한 간접 호출 (첫 시작시에만)
               if (beatCountRef.current === 5) {
                 Tone.Draw.schedule(() => startTimer(), time);
               }
 
               const stringIdx = stringPattern[patternStep] - 1;
+              
+              // 🔍 수정: 탐색 범위를 12부터 1까지만 설정 (0은 무시)
               let foundFret = -1;
-
-              // 12프렛부터 탐색
               for (let f = 12; f >= 1; f--) {
                 const noteWithOctave = getNoteFromFret(stringIdx, f);
                 const nName = noteWithOctave.slice(0, -1);
-                // Sharp 배열과 Flat 배열 모두에서 체크
                 if (nName === targetName || notesFlat[notes.indexOf(nName)] === targetName) {
                   foundFret = f;
-                  Tone.Draw.schedule(() => { setCurrentString(stringIdx); setCurrentFret(f); }, time);
+                  Tone.Draw.schedule(() => { 
+                    setCurrentString(stringIdx); 
+                    setCurrentFret(f); 
+                  }, time);
                   synthRef.current.triggerAttackRelease(noteWithOctave, '8n', time);
                   break;
-                }
-              }
-
-              if (foundFret === -1) {
-                const openNote = getNoteFromFret(stringIdx, 0);
-                if (openNote.slice(0, -1) === targetName || notesFlat[notes.indexOf(openNote.slice(0, -1))] === targetName) {
-                  Tone.Draw.schedule(() => { setCurrentString(stringIdx); setCurrentFret(0); }, time);
-                  synthRef.current.triggerAttackRelease(openNote, '8n', time);
                 }
               }
 
@@ -152,11 +142,11 @@
           return (
             <div className="min-h-screen bg-slate-900 text-white p-8 font-sans">
               <div className="max-w-5xl mx-auto">
-                <h1 className="text-3xl font-black mb-8 text-center text-blue-400 tracking-tighter">GUITAR FRETBOARD TRAINER PRO</h1>
+                <h1 className="text-3xl font-black mb-8 text-center text-blue-400 tracking-tighter uppercase italic">Fretboard Master</h1>
                 
                 <div className="bg-slate-800 p-6 rounded-2xl shadow-2xl mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 border border-slate-700">
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase">Note</label>
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase">Note Selection</label>
                     <div className="flex flex-wrap gap-1">
                       {['C','D','E','F','G','A','B'].map(n => (
                         <button key={n} onClick={() => setSelectedNote(n)} 
@@ -172,63 +162,62 @@
                     </div>
                   </div>
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">BPM: {bpm}</label>
-                      <input type="range" min="40" max="180" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-full accent-blue-500" />
+                    <div className="flex justify-between items-center bg-slate-900/50 p-2 rounded-lg border border-slate-700">
+                        <span className="text-xs font-bold text-slate-400 px-2 uppercase">BPM</span>
+                        <input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-16 bg-transparent text-right font-mono font-bold text-blue-400 outline-none" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">Time (Min)</label>
-                      <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="w-full bg-slate-700 p-2 rounded-lg font-bold outline-none border border-slate-600">
-                        {[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} Minute{m>1?'s':''}</option>)}
+                      <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="w-full bg-slate-700 p-2 rounded-lg font-bold outline-none border border-slate-600 text-sm">
+                        {[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} MINUTE{m>1?'S':''}</option>)}
                       </select>
                     </div>
                   </div>
                   <div className="flex items-end">
                     <button onClick={isPlaying ? stopPractice : startPractice} 
-                      className={`w-full py-4 rounded-xl font-black text-xl transition-all duration-300 ${isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-500'}`}>
+                      className={`w-full py-4 rounded-xl font-black text-xl transition-all duration-300 ${isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.4)]'}`}>
                       {isPlaying ? 'STOP' : 'START'}
                     </button>
                   </div>
                 </div>
 
-                {/* 진행 바 */}
                 {isPlaying && (
-                  <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-8">
+                  <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-8 animate-pulse-subtle">
                     <div className="flex justify-between items-center mb-4">
-                      <span className="text-blue-400 font-bold uppercase text-sm tracking-widest">{beatCountRef.current <= 4 ? "Ready..." : "In Progress"}</span>
-                      <span className="text-3xl font-mono font-bold">{Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}</span>
+                      <span className="text-blue-400 font-black uppercase text-xs tracking-widest">{beatCountRef.current <= 4 ? "Drum Stick Pre-beat..." : "Pattern Playing..."}</span>
+                      <span className="text-3xl font-mono font-bold text-white shadow-blue-500/50">{Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}</span>
                     </div>
                     <div className="w-full bg-slate-700 rounded-full h-4 overflow-hidden border border-slate-600 shadow-inner">
                       <div 
-                        className={`h-full transition-all duration-1000 ease-linear ${beatCountRef.current <= 4 ? 'bg-slate-500' : 'bg-gradient-to-r from-blue-600 to-cyan-400 shadow-[0_0_15px_rgba(59,130,246,0.6)]'}`}
+                        className={`h-full transition-all duration-1000 ease-linear ${beatCountRef.current <= 4 ? 'bg-slate-500' : 'bg-gradient-to-r from-blue-600 to-cyan-400'}`}
                         style={{ width: `${(timeRemaining / (duration * 60)) * 100}%` }}
                       ></div>
                     </div>
                   </div>
                 )}
 
-                {/* 지판 시각화 */}
                 <div className="bg-slate-800 p-8 rounded-2xl overflow-x-auto border border-slate-700 shadow-2xl relative">
                   <div className="min-w-[800px]">
                     {[...Array(6)].map((_, i) => {
                       const stringIdx = 5 - i; 
                       return (
                         <div key={stringIdx} className="relative h-14 flex items-center">
-                          <div className="w-20 font-bold text-slate-500 text-xs uppercase">{stringIdx + 1} String</div>
+                          <div className="w-20 font-bold text-slate-500 text-[10px] uppercase tracking-tighter italic">String {stringIdx + 1}</div>
                           <div className="flex-1 h-[3px] bg-slate-600 relative mx-4">
-                            {[...Array(13)].map((_, fret) => {
+                            {/* 🔍 수정: 0(개방현)을 제외하고 1번부터 12번 프렛만 렌더링 */}
+                            {[...Array(12)].map((_, idx) => {
+                              const fret = idx + 1; // 1, 2, ..., 12
                               const isCurrent = currentString === stringIdx && currentFret === fret;
                               const noteName = getNoteFromFret(stringIdx, fret).slice(0,-1);
                               const isTarget = noteName === targetNoteDisplay || notesFlat[notes.indexOf(noteName)] === targetNoteDisplay;
                               return (
-                                <div key={fret} className="absolute top-1/2 -translate-y-1/2" style={{left: `${(fret/12)*100}%`}}>
+                                <div key={fret} className="absolute top-1/2 -translate-y-1/2" style={{left: `${((fret-1)/11)*100}%`}}>
                                   {isTarget && (
-                                    <div className={`w-9 h-9 rounded-full flex items-center justify-center -translate-x-1/2 transition-all duration-200 
-                                      ${isCurrent ? 'bg-yellow-400 text-black scale-125 z-10 font-black shadow-[0_0_20px_rgba(250,204,21,0.6)]' : 'bg-slate-700 text-slate-400 border border-slate-500 font-bold opacity-40'}`}>
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center -translate-x-1/2 transition-all duration-200 
+                                      ${isCurrent ? 'bg-yellow-400 text-black scale-125 z-10 font-black shadow-[0_0_25px_rgba(250,204,21,0.8)]' : 'bg-slate-700/50 text-slate-400 border border-slate-500/50 font-bold opacity-30'}`}>
                                       {fret}
                                     </div>
                                   )}
-                                  <div className={`h-10 w-[2px] absolute -translate-x-1/2 mt-5 ${[3,5,7,9,12].includes(fret) ? 'bg-slate-500' : 'bg-slate-700/30'}`}></div>
+                                  <div className={`h-10 w-[2px] absolute -translate-x-1/2 mt-5 ${[3,5,7,9,12].includes(fret) ? 'bg-blue-500/40 shadow-[0_0_5px_rgba(59,130,246,0.5)]' : 'bg-slate-700/30'}`}></div>
                                 </div>
                               );
                             })}
@@ -236,6 +225,12 @@
                         </div>
                       )
                     })}
+                  </div>
+                  {/* 지판 하단 프렛 번호 표시 */}
+                  <div className="flex ml-24 mr-4 mt-6">
+                    {[...Array(12)].map((_, i) => (
+                      <div key={i} className="flex-1 text-center text-[10px] font-bold text-slate-500">{i + 1}</div>
+                    ))}
                   </div>
                 </div>
               </div>
