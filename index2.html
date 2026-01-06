@@ -2,15 +2,15 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>기타 지판 연습기 - Minimal Dark</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>기타 지판 연습기 - Screen Always On</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 </head>
-<body class="bg-slate-900">
+<body class="bg-slate-900 overflow-x-hidden">
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
@@ -30,6 +30,7 @@
           const loopRef = useRef(null);
           const beatCountRef = useRef(0);
           const intervalRef = useRef(null);
+          const wakeLockRef = useRef(null); // 🔥 화면 꺼짐 방지용 레퍼런스
 
           const stringNotes = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2']; 
           const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -43,8 +44,24 @@
             stickRef.current = new Tone.MembraneSynth({
               pitchDecay: 0.001, octaves: 0.1, envelope: { attack: 0.0001, decay: 0.05, sustain: 0 }
             }).toDestination();
-            return () => [synthRef.current, stickRef.current, loopRef.current].forEach(ref => ref?.dispose());
+            
+            // 페이지를 벗어날 때 정리
+            return () => {
+              stopPractice();
+              [synthRef.current, stickRef.current, loopRef.current].forEach(ref => ref?.dispose());
+            };
           }, []);
+
+          // 🔥 화면 꺼짐 방지 요청 함수
+          const requestWakeLock = async () => {
+            if ('wakeLock' in navigator) {
+              try {
+                wakeLockRef.current = await navigator.wakeLock.request('screen');
+              } catch (err) {
+                console.warn('Wake Lock 요청 실패:', err.message);
+              }
+            }
+          };
 
           const getNoteFromFret = (stringIndex, fret) => {
             const baseNote = stringNotes[stringIndex];
@@ -64,6 +81,8 @@
 
           const startPractice = async () => {
             await Tone.start();
+            await requestWakeLock(); // 🔥 화면 유지 시작
+            
             setIsPlaying(true);
             setTimeRemaining(duration * 60);
             beatCountRef.current = 0;
@@ -101,6 +120,7 @@
           };
 
           const startTimer = () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
             intervalRef.current = setInterval(() => {
               setTimeRemaining(prev => (prev <= 1 ? (stopPractice(), 0) : prev - 1));
             }, 1000);
@@ -109,7 +129,14 @@
           const stopPractice = () => {
             Tone.Transport.stop();
             if (loopRef.current) loopRef.current.stop();
-            clearInterval(intervalRef.current);
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            
+            // 🔥 화면 꺼짐 방지 해제
+            if (wakeLockRef.current) {
+              wakeLockRef.current.release();
+              wakeLockRef.current = null;
+            }
+
             setIsPlaying(false);
             setCurrentString(null);
             setCurrentFret(null);
@@ -118,12 +145,12 @@
           const targetNoteDisplay = getTargetNoteName();
 
           return (
-            <div className="min-h-screen text-white p-4 md:p-8 font-sans">
+            <div className="min-h-screen text-white p-4 md:p-8 font-sans touch-none">
               <div className="max-w-5xl mx-auto">
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-xl font-black text-slate-500 italic">FRETBOARD MASTER</h1>
+                    <h1 className="text-xl font-black text-slate-500 italic uppercase">Fretboard Trainer</h1>
                     {isPlaying && (
-                        <div className="bg-slate-800 px-4 py-1 rounded-full border border-slate-700 font-mono text-xl font-bold">
+                        <div className="bg-slate-800 px-4 py-1 rounded-full border border-slate-700 font-mono text-xl font-bold text-blue-400">
                             {Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}
                         </div>
                     )}
@@ -149,12 +176,12 @@
                     </select>
                   </div>
                   <button onClick={isPlaying ? stopPractice : startPractice} 
-                    className={`w-full py-3 rounded-xl font-black transition-all ${isPlaying ? 'bg-red-500' : 'bg-blue-600 shadow-lg shadow-blue-900/20'}`}>
+                    className={`w-full py-3 rounded-xl font-black transition-all ${isPlaying ? 'bg-red-500' : 'bg-blue-600'}`}>
                     {isPlaying ? 'STOP' : 'START'}
                   </button>
                 </div>
 
-                <div className="bg-slate-800 p-10 rounded-3xl border border-slate-700 shadow-inner overflow-x-auto">
+                <div className="bg-slate-800 p-6 md:p-10 rounded-3xl border border-slate-700 shadow-inner overflow-x-auto">
                   <div className="min-w-[800px]">
                     {[0, 1, 2, 3, 4, 5].map((stringIdx) => {
                       return (
@@ -174,7 +201,6 @@
                                       {fret}
                                     </div>
                                   )}
-                                  {/* 🔍 파란색 선 제거: 이제 모든 세로선은 옅은 회색으로 통일 */}
                                   <div className={`h-12 w-[1px] absolute -translate-x-1/2 mt-6 bg-slate-700/50`}></div>
                                 </div>
                               );
@@ -189,6 +215,13 @@
                       <div key={i} className="flex-1 text-center text-[10px] font-bold text-slate-600">{i + 1}</div>
                     ))}
                   </div>
+                </div>
+                
+                {/* 하단 상태바 */}
+                <div className="mt-8 text-center">
+                   <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                     {isPlaying ? "Screen Wake-Lock Active" : "Standby"}
+                   </p>
                 </div>
               </div>
             </div>
