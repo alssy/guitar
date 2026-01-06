@@ -2,166 +2,121 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Guitar Fretboard Master</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rhythmic Guitar Pattern Player</title>
     <style>
-        body { font-family: 'Pretendard', sans-serif; text-align: center; background: #1a1a1a; color: #fff; padding: 20px; }
-        .container { max-width: 500px; margin: auto; background: #2d2d2d; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .btn-group { margin: 15px 0; display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; }
-        button { padding: 12px; cursor: pointer; border: 1px solid #444; background: #3d3d3d; color: #fff; border-radius: 8px; transition: 0.2s; }
-        button:hover { background: #555; }
-        button.active { background: #007bff; border-color: #007bff; font-weight: bold; }
-        .display { font-size: 4rem; margin: 30px 0; color: #00d1b2; text-shadow: 0 0 20px rgba(0,209,178,0.3); }
-        .timer { font-size: 1.1rem; color: #aaa; margin-bottom: 10px; }
-        input, select { background: #3d3d3d; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 5px; }
-        .start-btn { background: #28a745; color: white; width: 100%; font-size: 1.5rem; border: none; padding: 15px; margin-top: 20px; border-radius: 10px; cursor: pointer; }
-        .start-btn.stop { background: #dc3545; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #1a1a1a; color: white; }
+        .display { font-size: 3rem; margin-bottom: 20px; font-weight: bold; color: #00ffcc; text-shadow: 0 0 10px #00ffcc; }
+        button { padding: 15px 30px; font-size: 1.2rem; cursor: pointer; background: #00ffcc; border: none; border-radius: 5px; font-weight: bold; transition: 0.3s; }
+        button:hover { background: #00ccaa; transform: scale(1.05); }
+        .status { margin-top: 20px; color: #888; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>🎸 지판 암기 트레이너</h2>
+    <div class="display" id="visualizer">READY</div>
+    <button onclick="startSequence()">PLAY SEQUENCE</button>
+    <div class="status" id="status-text">프리비트 4번 후 패턴이 시작됩니다.</div>
 
-    <div class="btn-group" id="note-btns">
-        <button onclick="setNote('C', this)">C</button>
-        <button onclick="setNote('D', this)">D</button>
-        <button onclick="setNote('E', this)">E</button>
-        <button onclick="setNote('F', this)">F</button>
-        <button onclick="setNote('G', this)">G</button>
-        <button onclick="setNote('A', this)">A</button>
-        <button onclick="setNote('B', this)">B</button>
-    </div>
+    <script>
+        let audioCtx;
+        const visualizer = document.getElementById('visualizer');
+        const statusText = document.getElementById('status-text');
 
-    <div class="btn-group" id="acc-btns">
-        <button class="active" onclick="setAcc('', this)">None</button>
-        <button onclick="setAcc('#', this)">♯ (Sharp)</button>
-        <button onclick="setAcc('b', this)">♭ (Flat)</button>
-    </div>
+        // 1. 음높이 데이터
+        const noteOffsets = { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 };
+        const stringOpenNotes = { 6: 40, 5: 45, 4: 50, 3: 55, 2: 59, 1: 64 };
+        const stringBaseNotes = { 6: 'E', 5: 'A', 4: 'D', 3: 'G', 2: 'B', 1: 'E' };
 
-    <div style="margin: 20px 0; font-size: 0.9rem; color: #ccc;">
-        BPM: <input type="number" id="bpm" value="60" min="30" max="200" style="width: 50px;"> |
-        시간: 
-        <select id="duration">
-            <option value="60">1분</option>
-            <option value="180">3분</option>
-            <option value="300">5분</option>
-        </select>
-    </div>
+        // [기타 사운드 합성]
+        function playGuitarSound(noteName, stringNum, time) {
+            const noteOnly = noteName.replace(/[0-9]/g, '');
+            const targetOffset = noteOffsets[noteOnly];
+            const openNote = stringOpenNotes[stringNum];
 
-    <hr style="border: 0.5px solid #444;">
+            let targetMidi = Math.floor(openNote / 12) * 12 + targetOffset;
+            if (targetMidi < openNote) targetMidi += 12;
 
-    <div class="timer" id="time-left">연습 준비 완료</div>
-    <div class="display" id="string-display">READY</div>
-    <div id="target-note" style="font-size: 1.2rem; color: #007bff;">음을 선택해 주세요</div>
+            const freq = 440 * Math.pow(2, (targetMidi - 69) / 12);
 
-    <button class="start-btn" id="start-stop" onclick="toggleStart()">START</button>
-</div>
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
 
-<script>
-    let selectedNote = '';
-    let selectedAccidental = '';
-    let isRunning = false;
-    let intervalId, timerId;
-    let currentStep = 0;
-    const sequence = [6, 5, 4, 3, 2, 1, 2, 3, 4, 5];
+            osc.type = 'triangle'; 
+            osc.frequency.setValueAtTime(freq, time);
 
-    // 주파수 맵 (4옥타브 기준 주파수)
-    const noteFrequencies = {
-        'C': 261.63, 'C#': 277.18, 'Db': 277.18, 'D': 293.66, 'D#': 311.13, 'Eb': 311.13,
-        'E': 329.63, 'F': 349.23, 'F#': 369.99, 'Gb': 369.99, 'G': 392.00, 'G#': 415.30,
-        'Ab': 415.30, 'A': 440.00, 'A#': 466.16, 'Bb': 466.16, 'B': 493.88
-    };
+            gain.gain.setValueAtTime(0.5, time);
+            gain.gain.exponentialRampToValueAtTime(0.01, time + 1.2);
 
-    // 기타 줄별 기본 옥타브 차이 적용
-    const stringOctaveOffset = { 6: 0.25, 5: 0.33, 4: 0.5, 3: 0.66, 2: 0.85, 1: 1.0 };
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
 
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-    function setNote(note, btn) {
-        selectedNote = note;
-        updateUI('note-btns', btn);
-    }
-
-    function setAcc(acc, btn) {
-        selectedAccidental = acc;
-        updateUI('acc-btns', btn);
-    }
-
-    function updateUI(groupId, activeBtn) {
-        document.querySelectorAll(`#${groupId} button`).forEach(b => b.classList.remove('active'));
-        activeBtn.classList.add('active');
-        document.getElementById('target-note').innerText = `연습 목표: ${selectedNote}${selectedAccidental}`;
-    }
-
-    function playGuitarSound(noteName, stringNum) {
-        const baseFreq = noteFrequencies[noteName];
-        if (!baseFreq) return;
-
-        // 줄 번호에 따라 옥타브 조정 (기타의 실제 음역대 시뮬레이션)
-        let freq = baseFreq;
-        if (stringNum >= 4) freq /= 2; // 4, 5, 6번줄은 한 옥타브 낮게
-        if (stringNum >= 6) freq /= 2; // 6번줄은 더 낮게
-
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-
-        osc.type = 'triangle'; // 기타와 유사한 부드러운 파형
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-
-        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
-
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.8);
-    }
-
-    function toggleStart() {
-        if (isRunning) {
-            stop();
-        } else {
-            if (!selectedNote) return alert('음을 선택하세요!');
-            start();
+            osc.start(time);
+            osc.stop(time + 1.2);
         }
-    }
 
-    function start() {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        isRunning = true;
-        const btn = document.getElementById('start-stop');
-        btn.innerText = 'STOP';
-        btn.classList.add('stop');
+        // [드럼 프리비트 합성]
+        function playDrumBeat(time) {
+            const noise = audioCtx.createBufferSource();
+            const bufferSize = audioCtx.sampleRate * 0.1;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
 
-        const bpm = document.getElementById('bpm').value;
-        const ms = (60 / bpm) * 1000;
-        let timeLeft = parseInt(document.getElementById('duration').value);
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(800, time);
 
-        intervalId = setInterval(() => {
-            const stringNum = sequence[currentStep];
-            document.getElementById('string-display').innerText = stringNum + "번 줄";
-            playGuitarSound(selectedNote + selectedAccidental, stringNum);
-            currentStep = (currentStep + 1) % sequence.length;
-        }, ms);
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0.6, time);
+            gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
 
-        timerId = setInterval(() => {
-            timeLeft--;
-            document.getElementById('time-left').innerText = `남은 시간: ${Math.floor(timeLeft/60)}:${(timeLeft%60).toString().padStart(2,'0')}`;
-            if (timeLeft <= 0) stop();
-        }, 1000);
-    }
+            noise.buffer = buffer;
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            noise.start(time);
+        }
 
-    function stop() {
-        isRunning = false;
-        clearInterval(intervalId);
-        clearInterval(timerId);
-        const btn = document.getElementById('start-stop');
-        btn.innerText = 'START';
-        btn.classList.remove('stop');
-        document.getElementById('string-display').innerText = 'END';
-        currentStep = 0;
-    }
-</script>
+        // [메인 실행부]
+        async function startSequence() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+            let startTime = audioCtx.currentTime + 0.2;
+
+            // 1. 드럼 프리비트 4회 (6-5-4-3-2-1 직전 분위기 고조)
+            for (let i = 0; i < 4; i++) {
+                const beatTime = startTime + i * 0.5;
+                playDrumBeat(beatTime);
+                setTimeout(() => {
+                    visualizer.innerText = `BEAT ${i + 1}`;
+                    statusText.innerText = "Drumming...";
+                }, (beatTime - audioCtx.currentTime) * 1000);
+            }
+
+            // 2. 6-5-4-3-2-1-1-2-3-4-5-6 패턴 구성
+            const pattern = [6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6];
+            let playCursor = startTime + 2.0;
+
+            pattern.forEach((stringNum, index) => {
+                const noteName = stringBaseNotes[stringNum];
+                const noteTime = playCursor + index * 0.4;
+
+                playGuitarSound(noteName, stringNum, noteTime);
+
+                setTimeout(() => {
+                    visualizer.innerText = stringNum;
+                    statusText.innerText = `Playing String ${stringNum} (${noteName})`;
+                    if (index === pattern.length - 1) {
+                        setTimeout(() => { 
+                            visualizer.innerText = "COMPLETE"; 
+                            statusText.innerText = "다시 시작하려면 버튼을 누르세요.";
+                        }, 1000);
+                    }
+                }, (noteTime - audioCtx.currentTime) * 1000);
+            });
+        }
+    </script>
 </body>
 </html>
