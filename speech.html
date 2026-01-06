@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Fretboard Trainer - Voice Mode</title>
+    <title>Fretboard Trainer - Pitch & Voice</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -25,6 +25,7 @@
           const [currentFret, setCurrentFret] = useState(null);
           const [timeRemaining, setTimeRemaining] = useState(0);
           
+          const synthRef = useRef(null);
           const stickRef = useRef(null);
           const loopRef = useRef(null);
           const beatCountRef = useRef(0);
@@ -36,6 +37,12 @@
           const notesFlat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
           useEffect(() => {
+            // 정확한 주파수를 내기 위한 신시사이저 설정
+            synthRef.current = new Tone.PolySynth(Tone.Synth, {
+              oscillator: { type: 'triangle' },
+              envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 0.8 }
+            }).toDestination();
+
             stickRef.current = new Tone.MembraneSynth({
               pitchDecay: 0.001, octaves: 0.1, envelope: { attack: 0.0001, decay: 0.05, sustain: 0 }
             }).toDestination();
@@ -43,17 +50,13 @@
             return () => stopPractice();
           }, []);
 
-          // 🔥 알파벳 음성 출력 함수
+          // 알파벳 음성 출력
           const speakNote = (noteName) => {
-            // #은 'Sharp', b은 'Flat'으로 읽도록 변환
-            const voicedName = noteName
-                .replace('#', ' Sharp')
-                .replace('b', ' Flat');
-            
+            window.speechSynthesis.cancel(); // 이전 음성 즉시 중단
+            const voicedName = noteName.replace('#', ' Sharp').replace('b', ' Flat');
             const utterance = new SpeechSynthesisUtterance(voicedName);
-            utterance.lang = 'en-US'; // 영어 발음 설정
-            utterance.rate = 1.2;     // 말하는 속도 (약간 빠르게)
-            utterance.pitch = 1.0;    // 음높이
+            utterance.lang = 'en-US';
+            utterance.rate = 1.3; // 박자에 맞추기 위해 약간 빠르게
             window.speechSynthesis.speak(utterance);
           };
 
@@ -70,7 +73,11 @@
             const octave = parseInt(baseNote.slice(-1));
             const noteIndex = notes.indexOf(noteName);
             const newNoteIndex = (noteIndex + fret) % 12;
-            return notes[newNoteIndex];
+            const octaveShift = Math.floor((noteIndex + fret) / 12);
+            return {
+                name: notes[newNoteIndex],
+                full: notes[newNoteIndex] + (octave + octaveShift)
+            };
           };
 
           const getTargetNoteName = () => {
@@ -107,15 +114,16 @@
               
               let foundFret = -1;
               for (let f = 12; f >= 1; f--) {
-                const nName = getNoteFromFret(stringIdx, f);
-                if (nName === targetName || notesFlat[notes.indexOf(nName)] === targetName) {
+                const noteObj = getNoteFromFret(stringIdx, f);
+                if (noteObj.name === targetName || notesFlat[notes.indexOf(noteObj.name)] === targetName) {
                   foundFret = f;
                   Tone.Draw.schedule(() => { 
                     setCurrentString(stringIdx); 
                     setCurrentFret(f); 
-                    // 🔥 음정 소리 대신 알파벳 발음 실행
-                    speakNote(targetName);
+                    speakNote(targetName); // 🔥 발음 출력
                   }, time);
+                  // 🔥 정확한 주파수 소리 출력
+                  synthRef.current.triggerAttackRelease(noteObj.full, '4n', time);
                   break;
                 }
               }
@@ -136,7 +144,7 @@
             if (loopRef.current) loopRef.current.stop();
             if (intervalRef.current) clearInterval(intervalRef.current);
             if (wakeLockRef.current) { wakeLockRef.current.release(); wakeLockRef.current = null; }
-            window.speechSynthesis.cancel(); // 말하기 중단
+            window.speechSynthesis.cancel();
             setIsPlaying(false);
             setCurrentString(null);
             setCurrentFret(null);
@@ -147,27 +155,25 @@
           return (
             <div className="min-h-screen text-white p-4 md:p-8 font-sans touch-none bg-slate-900">
               <div className="max-w-5xl mx-auto">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-xl font-black text-slate-500 italic uppercase">Fretboard Voice Master</h1>
+                <div className="flex justify-between items-center mb-6 px-2">
+                    <h1 className="text-xl font-black text-slate-600 italic uppercase tracking-tighter">Pitch & Voice Trainer</h1>
                     {isPlaying && (
-                        <div className="bg-slate-800 px-4 py-1 rounded-full border border-slate-700 font-mono text-xl font-bold text-blue-400">
+                        <div className="bg-slate-800 px-4 py-1 rounded-full border border-slate-700 font-mono text-xl font-bold text-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.3)]">
                             {Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}
                         </div>
                     )}
                 </div>
                 
                 <div className="bg-slate-800 p-6 rounded-2xl shadow-2xl mb-8 grid grid-cols-1 md:grid-cols-4 gap-4 border border-slate-700">
-                  <div className="md:col-span-1">
-                    <div className="flex flex-wrap gap-1">
+                  <div className="md:col-span-1 flex flex-wrap gap-1">
                       {['C','D','E','F','G','A','B'].map(n => (
                         <button key={n} onClick={() => setSelectedNote(n)} 
-                          className={`w-9 h-9 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400 shadow-blue-500/50 shadow-lg' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
+                          className={`w-9 h-9 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400 shadow-lg' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
                       ))}
-                    </div>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => setAccidental(accidental === '#' ? '' : '#')} className={`flex-1 rounded-lg font-bold transition ${accidental === '#' ? 'bg-green-600 shadow-lg' : 'bg-slate-700'}`}>#</button>
-                    <button onClick={() => setAccidental(accidental === 'b' ? '' : 'b')} className={`flex-1 rounded-lg font-bold transition ${accidental === 'b' ? 'bg-green-600 shadow-lg' : 'bg-slate-700'}`}>♭</button>
+                    <button onClick={() => setAccidental(accidental === '#' ? '' : '#')} className={`flex-1 rounded-lg font-bold transition ${accidental === '#' ? 'bg-green-600' : 'bg-slate-700'}`}>#</button>
+                    <button onClick={() => setAccidental(accidental === 'b' ? '' : 'b')} className={`flex-1 rounded-lg font-bold transition ${accidental === 'b' ? 'bg-green-600' : 'bg-slate-700'}`}>♭</button>
                   </div>
                   <div className="flex gap-2">
                     <input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-1/2 bg-slate-900 p-2 rounded-lg text-center font-mono font-bold text-blue-400 border border-slate-700 outline-none" />
@@ -176,7 +182,7 @@
                     </select>
                   </div>
                   <button onClick={isPlaying ? stopPractice : startPractice} 
-                    className={`w-full py-3 rounded-xl font-black transition-all ${isPlaying ? 'bg-red-500' : 'bg-blue-600 active:scale-95'}`}>
+                    className={`w-full py-3 rounded-xl font-black transition-all ${isPlaying ? 'bg-red-500' : 'bg-blue-600'}`}>
                     {isPlaying ? 'STOP' : 'START'}
                   </button>
                 </div>
@@ -190,7 +196,7 @@
                             {[...Array(12)].map((_, idx) => {
                               const fret = idx + 1;
                               const isCurrent = currentString === stringIdx && currentFret === fret;
-                              const noteName = getNoteFromFret(stringIdx, fret);
+                              const noteName = getNoteFromFret(stringIdx, fret).name;
                               const isTarget = noteName === targetNoteDisplay || notesFlat[notes.indexOf(noteName)] === targetNoteDisplay;
                               return (
                                 <div key={fret} className="absolute top-1/2 -translate-y-1/2" style={{left: `${((fret-1)/11)*100}%`}}>
