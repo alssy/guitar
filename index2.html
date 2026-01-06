@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>기타 지판 연습기 - Rhythmic Edition</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const GuitarFretboardTrainer = () => {
+          const [selectedNote, setSelectedNote] = useState('C');
+          const [useSharp, setUseSharp] = useState(false);
+          const [useFlat, setUseFlat] = useState(false);
+          const [bpm, setBpm] = useState(60);
+          const [duration, setDuration] = useState(1);
+          const [isPlaying, setIsPlaying] = useState(false);
+          const [currentString, setCurrentString] = useState(null);
+          const [currentFret, setCurrentFret] = useState(null);
+          const [timeRemaining, setTimeRemaining] = useState(0);
+          
+          const synthRef = useRef(null);
+          const clickRef = useRef(null);
+          const loopRef = useRef(null);
+          const beatCountRef = useRef(0);
+          const intervalRef = useRef(null);
+
+          const stringNotes = ['E2', 'A2', 'D3', 'G3', 'B3', 'E4']; // 6번줄 ~ 1번줄
+          const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+          const notesFlat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+          useEffect(() => {
+            synthRef.current = new Tone.PolySynth(Tone.Synth, {
+              oscillator: { type: 'triangle' },
+              envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
+            }).toDestination();
+
+            clickRef.current = new Tone.MembraneSynth().toDestination();
+
+            return () => {
+              [synthRef.current, clickRef.current, loopRef.current].forEach(ref => ref?.dispose());
+            };
+          }, []);
+
+          const getNoteFromFret = (stringIndex, fret) => {
+            const baseNote = stringNotes[stringIndex];
+            const noteName = baseNote.slice(0, -1);
+            const octave = parseInt(baseNote.slice(-1));
+            const noteIndex = notes.indexOf(noteName);
+            const newNoteIndex = (noteIndex + fret) % 12;
+            const octaveShift = Math.floor((noteIndex + fret) / 12);
+            return notes[newNoteIndex] + (octave + octaveShift);
+          };
+
+          const getTargetNoteName = () => {
+            let target = selectedNote;
+            if (useSharp && !selectedNote.includes('#') && !['E', 'B'].includes(selectedNote)) {
+                target = notes[(notes.indexOf(selectedNote) + 1) % 12];
+            } else if (useFlat && !selectedNote.includes('b') && !['F', 'C'].includes(selectedNote)) {
+                target = notes[(notes.indexOf(selectedNote) + 11) % 12];
+            }
+            return target;
+          };
+
+          const startPractice = async () => {
+            await Tone.start();
+            setIsPlaying(true);
+            setTimeRemaining(duration * 60);
+            beatCountRef.current = 0;
+            
+            const targetNoteName = getTargetNoteName();
+            const stringPattern = [6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6];
+            let patternStep = 0;
+
+            Tone.Transport.bpm.value = bpm;
+            
+            loopRef.current = new Tone.Loop((time) => {
+              beatCountRef.current++;
+              
+              if (beatCountRef.current <= 4) {
+                // 🥁 프리비트 4회
+                clickRef.current.triggerAttackRelease('G2', '32n', time, 0.4);
+                return;
+              }
+
+              // 🎸 패턴 연주 (6-5-4-3-2-1-1-2-3-4-5-6)
+              const currentStringNum = stringPattern[patternStep];
+              const stringIdx = currentStringNum - 1; // 0-based index (0=E2...)
+              
+              // 해당 줄에서 타겟 음 찾기
+              let foundFret = -1;
+              for (let f = 0; f <= 12; f++) {
+                const noteWithOctave = getNoteFromFret(stringIdx, f);
+                const nName = noteWithOctave.slice(0, -1);
+                if (nName === targetNoteName || notesFlat[notes.indexOf(nName)] === targetNoteName) {
+                  foundFret = f;
+                  const fullNote = noteWithOctave;
+                  
+                  // 재생 및 시각화
+                  Tone.Draw.schedule(() => {
+                    setCurrentString(stringIdx);
+                    setCurrentFret(f);
+                  }, time);
+
+                  synthRef.current.triggerAttackRelease(fullNote, '8n', time);
+                  break;
+                }
+              }
+
+              patternStep = (patternStep + 1) % stringPattern.length;
+            }, '4n').start(0);
+            
+            Tone.Transport.start();
+            
+            intervalRef.current = setInterval(() => {
+              setTimeRemaining(prev => {
+                if (prev <= 1) {
+                  stopPractice();
+                  return 0;
+                }
+                return prev - 1;
+              });
+            }, 1000);
+          };
+
+          const stopPractice = () => {
+            Tone.Transport.stop();
+            if (loopRef.current) loopRef.current.stop();
+            clearInterval(intervalRef.current);
+            setIsPlaying(false);
+            setCurrentString(null);
+            setCurrentFret(null);
+          };
+
+          return (
+            <div className="min-h-screen bg-slate-900 text-white p-8">
+              <div className="max-w-5xl mx-auto">
+                <h1 className="text-3xl font-bold mb-8 text-center text-blue-400">기타 지판 리듬 연습기</h1>
+                
+                {/* 설정 패널 */}
+                <div className="bg-slate-800 p-6 rounded-xl shadow-2xl mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 border border-slate-700">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">음 선택</label>
+                    <div className="flex flex-wrap gap-1">
+                      {['C','D','E','F','G','A','B'].map(n => (
+                        <button key={n} onClick={() => setSelectedNote(n)} 
+                          className={`w-10 h-10 rounded ${selectedNote === n ? 'bg-blue-500' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">변화표</label>
+                    <div className="flex gap-2">
+                      <button onClick={() => {setUseSharp(!useSharp); setUseFlat(false)}} className={`px-4 py-2 rounded ${useSharp ? 'bg-green-600' : 'bg-slate-700'}`}>#</button>
+                      <button onClick={() => {setUseFlat(!useFlat); setUseSharp(false)}} className={`px-4 py-2 rounded ${useFlat ? 'bg-green-600' : 'bg-slate-700'}`}>♭</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">BPM: {bpm}</label>
+                    <input type="range" min="40" max="180" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-full" />
+                  </div>
+                  <div className="flex items-end">
+                    <button onClick={isPlaying ? stopPractice : startPractice} 
+                      className={`w-full py-3 rounded-lg font-bold text-xl transition ${isPlaying ? 'bg-red-500' : 'bg-blue-600 hover:bg-blue-500'}`}>
+                      {isPlaying ? 'STOP' : 'START'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 지판 시각화 */}
+                <div className="bg-slate-800 p-8 rounded-xl overflow-x-auto border border-slate-700">
+                  <div className="min-w-[800px]">
+                    {[...Array(6)].map((_, i) => {
+                      const stringIdx = 5 - i; // 1번줄(E4)이 위로 가도록
+                      return (
+                        <div key={stringIdx} className="relative h-12 flex items-center">
+                          <div className="w-16 font-bold text-slate-400">{stringIdx + 1}번줄</div>
+                          <div className="flex-1 h-[2px] bg-slate-600 relative">
+                            {[...Array(13)].map((_, fret) => {
+                              const isCurrent = currentString === stringIdx && currentFret === fret;
+                              const isTarget = getNoteFromFret(stringIdx, fret).slice(0,-1) === getTargetNoteName();
+                              return (
+                                <div key={fret} className="absolute top-1/2 -translate-y-1/2" style={{left: `${(fret/12)*100}%`}}>
+                                  {isTarget && (
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center -translate-x-1/2 transition-all 
+                                      ${isCurrent ? 'bg-yellow-400 text-black scale-125 z-10' : 'bg-slate-700 text-slate-300 border border-slate-500'}`}>
+                                      {fret}
+                                    </div>
+                                  )}
+                                  <div className="h-8 w-[1px] bg-slate-700 absolute -translate-x-1/2 mt-4"></div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                
+                {isPlaying && (
+                  <div className="mt-6 text-center text-2xl font-mono text-green-400">
+                    남은 시간: {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        };
+
+        ReactDOM.render(<GuitarFretboardTrainer />, document.getElementById('root'));
+    </script>
+</body>
+</html>
