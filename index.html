@@ -13,156 +13,180 @@
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        import React, { useState, useEffect, useRef } from 'react';
-import * as Tone from 'tone';
+        const { useState, useEffect, useRef } = React;
 
-const GuitarFretboardTrainer = () => {
-  const [selectedNote, setSelectedNote] = useState('C');
-  const [useSharp, setUseSharp] = useState(false);
-  const [useFlat, setUseFlat] = useState(false);
-  const [bpm, setBpm] = useState(60);
-  const [duration, setDuration] = useState(1);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentString, setCurrentString] = useState(null);
-  const [currentFret, setCurrentFret] = useState(null);
-  const [direction, setDirection] = useState('down');
-  const [shouldStop, setShouldStop] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState(0);
-  const timerRef = useRef(null);
-  const intervalRef = useRef(null);
-  const synthRef = useRef(null);
-  const clickRef = useRef(null);
-  const loopRef = useRef(null);
-  const beatCountRef = useRef(0);
-
-  // 기타 표준 튜닝 (6번줄부터 1번줄)
-  const stringNotes = ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'];
-  
-  // 음계 (반음 단위)
-  const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-  const notesFlat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
-
-  useEffect(() => {
-    synthRef.current = new Tone.Synth({
-      oscillator: { type: 'triangle' },
-      envelope: {
-        attack: 0.005,
-        decay: 0.1,
-        sustain: 0.3,
-        release: 1
-      }
-    }).toDestination();
-
-    // 드럼스틱 클릭 소리 (나무 블록 사운드)
-    clickRef.current = new Tone.MembraneSynth({
-      pitchDecay: 0.008,
-      octaves: 2,
-      envelope: {
-        attack: 0.0006,
-        decay: 0.05,
-        sustain: 0
-      }
-    }).toDestination();
-
-    return () => {
-      if (synthRef.current) {
-        synthRef.current.dispose();
-      }
-      if (clickRef.current) {
-        clickRef.current.dispose();
-      }
-      if (loopRef.current) {
-        loopRef.current.dispose();
-      }
-    };
-  }, []);
-
-  const getNoteFromFret = (stringIndex, fret) => {
-    const baseNote = stringNotes[stringIndex];
-    const noteName = baseNote.slice(0, -1);
-    const octave = parseInt(baseNote.slice(-1));
-    
-    const noteIndex = notes.indexOf(noteName);
-    const newNoteIndex = (noteIndex + fret) % 12;
-    const octaveShift = Math.floor((noteIndex + fret) / 12);
-    
-    return notes[newNoteIndex] + (octave + octaveShift);
-  };
-
-  const findNotesOnFretboard = () => {
-    const positions = [];
-    let targetNote = selectedNote;
-    
-    if (useSharp && !selectedNote.includes('#') && selectedNote !== 'E' && selectedNote !== 'B') {
-      const idx = notes.indexOf(selectedNote);
-      targetNote = notes[idx + 1];
-    } else if (useFlat && !selectedNote.includes('b') && selectedNote !== 'F' && selectedNote !== 'C') {
-      const idx = notes.indexOf(selectedNote);
-      targetNote = notes[idx - 1];
-    }
-
-    for (let stringIdx = 0; stringIdx < 6; stringIdx++) {
-      for (let fret = 0; fret <= 12; fret++) {
-        const note = getNoteFromFret(stringIdx, fret);
-        const noteName = note.slice(0, -1);
-        if (noteName === targetNote || 
-            (notesFlat[notes.indexOf(noteName)] === targetNote)) {
-          positions.push({ string: stringIdx, fret, note });
-        }
-      }
-    }
-    
-    return positions;
-  };
-
-  const startPractice = async () => {
-    await Tone.start();
-    setIsPlaying(true);
-    setShouldStop(false);
-    setTimeRemaining(duration * 60);
-    beatCountRef.current = 0;
-    
-    const allPositions = findNotesOnFretboard();
-    
-    // 줄별로 그룹화
-    const positionsByString = {};
-    for (let i = 0; i < 6; i++) {
-      positionsByString[i] = allPositions.filter(p => p.string === i).sort((a, b) => a.fret - b.fret);
-    }
-    
-    // 6-5-4-3-2-1-1-2-3-4-5-6 패턴 생성
-    const pattern = [];
-    // 6번줄부터 1번줄까지 (5,4,3,2,1,0 인덱스)
-    for (let s = 5; s >= 0; s--) {
-      pattern.push(...positionsByString[s]);
-    }
-    // 1번줄부터 6번줄까지 (0,1,2,3,4,5 인덱스)
-    for (let s = 0; s <= 5; s++) {
-      pattern.push(...positionsByString[s]);
-    }
-    
-    let posIndex = 0;
-    
-    Tone.Transport.bpm.value = bpm;
-    
-    loopRef.current = new Tone.Loop((time) => {
-      beatCountRef.current++;
-      
-      // 4비트 카운트 후 음 재생
-      if (beatCountRef.current > 4) {
-        if (pattern.length > 0) {
-          const pos = pattern[posIndex];
-          setCurrentString(pos.string);
-          setCurrentFret(pos.fret);
+        const GuitarFretboardTrainer = () => {
+          const [selectedNote, setSelectedNote] = useState('C');
+          const [useSharp, setUseSharp] = useState(false);
+          const [useFlat, setUseFlat] = useState(false);
+          const [bpm, setBpm] = useState(60);
+          const [duration, setDuration] = useState(1);
+          const [isPlaying, setIsPlaying] = useState(false);
+          const [currentString, setCurrentString] = useState(null);
+          const [currentFret, setCurrentFret] = useState(null);
+          const [direction, setDirection] = useState('down');
+          const [shouldStop, setShouldStop] = useState(false);
+          const [timeRemaining, setTimeRemaining] = useState(0);
           
-          synthRef.current.triggerAttackRelease(pos.note, '8n', time);
-          
-          posIndex = (posIndex + 1) % pattern.length;
-          
-          // 시퀀스 완료 시 shouldStop 확인
-          if (posIndex === 0 && shouldStop) {
+          const synthRef = useRef(null);
+          const clickRef = useRef(null);
+          const loopRef = useRef(null);
+          const beatCountRef = useRef(0);
+          const timerRef = useRef(null);
+          const intervalRef = useRef(null);
+
+          const stringNotes = ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'];
+          const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+          const notesFlat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+          useEffect(() => {
+            synthRef.current = new Tone.Synth({
+              oscillator: { type: 'triangle' },
+              envelope: {
+                attack: 0.005,
+                decay: 0.1,
+                sustain: 0.3,
+                release: 1
+              }
+            }).toDestination();
+
+            clickRef.current = new Tone.MembraneSynth({
+              pitchDecay: 0.008,
+              octaves: 2,
+              envelope: {
+                attack: 0.0006,
+                decay: 0.05,
+                sustain: 0
+              }
+            }).toDestination();
+
+            return () => {
+              if (synthRef.current) {
+                synthRef.current.dispose();
+              }
+              if (clickRef.current) {
+                clickRef.current.dispose();
+              }
+              if (loopRef.current) {
+                loopRef.current.dispose();
+              }
+            };
+          }, []);
+
+          const getNoteFromFret = (stringIndex, fret) => {
+            const baseNote = stringNotes[stringIndex];
+            const noteName = baseNote.slice(0, -1);
+            const octave = parseInt(baseNote.slice(-1));
+            
+            const noteIndex = notes.indexOf(noteName);
+            const newNoteIndex = (noteIndex + fret) % 12;
+            const octaveShift = Math.floor((noteIndex + fret) / 12);
+            
+            return notes[newNoteIndex] + (octave + octaveShift);
+          };
+
+          const findNotesOnFretboard = () => {
+            const positions = [];
+            let targetNote = selectedNote;
+            
+            if (useSharp && !selectedNote.includes('#') && selectedNote !== 'E' && selectedNote !== 'B') {
+              const idx = notes.indexOf(selectedNote);
+              targetNote = notes[idx + 1];
+            } else if (useFlat && !selectedNote.includes('b') && selectedNote !== 'F' && selectedNote !== 'C') {
+              const idx = notes.indexOf(selectedNote);
+              targetNote = notes[idx - 1];
+            }
+
+            for (let stringIdx = 0; stringIdx < 6; stringIdx++) {
+              for (let fret = 0; fret <= 12; fret++) {
+                const note = getNoteFromFret(stringIdx, fret);
+                const noteName = note.slice(0, -1);
+                if (noteName === targetNote || 
+                    (notesFlat[notes.indexOf(noteName)] === targetNote)) {
+                  positions.push({ string: stringIdx, fret, note });
+                }
+              }
+            }
+            
+            return positions;
+          };
+
+          const startPractice = async () => {
+            await Tone.start();
+            setIsPlaying(true);
+            setShouldStop(false);
+            setTimeRemaining(duration * 60);
+            beatCountRef.current = 0;
+            
+            const allPositions = findNotesOnFretboard();
+            
+            const positionsByString = {};
+            for (let i = 0; i < 6; i++) {
+              positionsByString[i] = allPositions.filter(p => p.string === i).sort((a, b) => a.fret - b.fret);
+            }
+            
+            const pattern = [];
+            for (let s = 5; s >= 0; s--) {
+              pattern.push(...positionsByString[s]);
+            }
+            for (let s = 0; s <= 5; s++) {
+              pattern.push(...positionsByString[s]);
+            }
+            
+            let posIndex = 0;
+            
+            Tone.Transport.bpm.value = bpm;
+            
+            loopRef.current = new Tone.Loop((time) => {
+              beatCountRef.current++;
+              
+              if (beatCountRef.current > 4) {
+                if (pattern.length > 0) {
+                  const pos = pattern[posIndex];
+                  setCurrentString(pos.string);
+                  setCurrentFret(pos.fret);
+                  
+                  synthRef.current.triggerAttackRelease(pos.note, '8n', time);
+                  
+                  posIndex = (posIndex + 1) % pattern.length;
+                  
+                  if (posIndex === 0 && shouldStop) {
+                    Tone.Transport.stop();
+                    loopRef.current.stop();
+                    if (intervalRef.current) {
+                      clearInterval(intervalRef.current);
+                    }
+                    setIsPlaying(false);
+                    setCurrentString(null);
+                    setCurrentFret(null);
+                    setShouldStop(false);
+                    setTimeRemaining(0);
+                  }
+                }
+              } else {
+                clickRef.current.triggerAttackRelease('C2', '32n', time);
+              }
+            }, '4n').start(0);
+            
+            Tone.Transport.start();
+            
+            intervalRef.current = setInterval(() => {
+              setTimeRemaining(prev => Math.max(0, prev - 1));
+            }, 1000);
+            
+            timerRef.current = setTimeout(() => {
+              setShouldStop(true);
+            }, duration * 60 * 1000);
+          };
+
+          const stopPractice = () => {
             Tone.Transport.stop();
-            loopRef.current.stop();
+            if (loopRef.current) {
+              loopRef.current.stop();
+            }
+            if (timerRef.current) {
+              clearTimeout(timerRef.current);
+            }
             if (intervalRef.current) {
               clearInterval(intervalRef.current);
             }
@@ -171,234 +195,186 @@ const GuitarFretboardTrainer = () => {
             setCurrentFret(null);
             setShouldStop(false);
             setTimeRemaining(0);
-          }
-        }
-      } else {
-        // 카운트 비트 (드럼스틱 클릭 소리)
-        clickRef.current.triggerAttackRelease('C2', '32n', time);
-      }
-    }, '4n').start(0);
-    
-    Tone.Transport.start();
-    
-    // 1초마다 남은 시간 업데이트
-    intervalRef.current = setInterval(() => {
-      setTimeRemaining(prev => Math.max(0, prev - 1));
-    }, 1000);
-    
-    // 연습 시간 후 shouldStop 플래그 설정
-    timerRef.current = setTimeout(() => {
-      setShouldStop(true);
-    }, duration * 60 * 1000);
-  };
+            beatCountRef.current = 0;
+          };
 
-  const stopPractice = () => {
-    Tone.Transport.stop();
-    if (loopRef.current) {
-      loopRef.current.stop();
-    }
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-    setIsPlaying(false);
-    setCurrentString(null);
-    setCurrentFret(null);
-    setShouldStop(false);
-    setTimeRemaining(0);
-    beatCountRef.current = 0;
-  };
+          const positions = findNotesOnFretboard();
 
-  const positions = findNotesOnFretboard();
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-8">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-4xl font-bold text-white mb-8 text-center">
-          기타 지판 연습기
-        </h1>
-        
-        {/* 컨트롤 패널 */}
-        <div className="bg-slate-700 rounded-lg p-6 mb-8 shadow-xl">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* 음 선택 */}
-            <div>
-              <label className="block text-white font-semibold mb-2">음 선택 *</label>
-              <div className="grid grid-cols-7 gap-1">
-                {['C', 'D', 'E', 'F', 'G', 'A', 'B'].map(note => (
-                  <button
-                    key={note}
-                    onClick={() => setSelectedNote(note)}
-                    className={`py-2 px-3 rounded font-bold transition ${
-                      selectedNote === note
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-slate-600 text-gray-300 hover:bg-slate-500'
-                    }`}
-                  >
-                    {note}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 샵/플랫 */}
-            <div>
-              <label className="block text-white font-semibold mb-2">변화표 (옵션)</label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setUseSharp(!useSharp)}
-                  className={`flex-1 py-2 px-4 rounded font-bold transition ${
-                    useSharp
-                      ? 'bg-green-500 text-white'
-                      : 'bg-slate-600 text-gray-300 hover:bg-slate-500'
-                  }`}
-                >
-                  # (Sharp)
-                </button>
-                <button
-                  onClick={() => setUseFlat(!useFlat)}
-                  className={`flex-1 py-2 px-4 rounded font-bold transition ${
-                    useFlat
-                      ? 'bg-green-500 text-white'
-                      : 'bg-slate-600 text-gray-300 hover:bg-slate-500'
-                  }`}
-                >
-                  ♭ (Flat)
-                </button>
-              </div>
-            </div>
-
-            {/* BPM */}
-            <div>
-              <label className="block text-white font-semibold mb-2">
-                BPM: {bpm}
-              </label>
-              <input
-                type="range"
-                min="40"
-                max="200"
-                value={bpm}
-                onChange={(e) => setBpm(Number(e.target.value))}
-                className="w-full"
-              />
-            </div>
-
-            {/* 연습 시간 */}
-            <div>
-              <label className="block text-white font-semibold mb-2">
-                연습 시간: {duration}분
-              </label>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="w-full"
-              />
-            </div>
-          </div>
-
-          {/* 시작/정지 버튼 */}
-          <div className="mt-6 text-center">
-            {!isPlaying ? (
-              <button
-                onClick={startPractice}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-xl transition shadow-lg"
-              >
-                시작
-              </button>
-            ) : (
-              <button
-                onClick={stopPractice}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-lg text-xl transition shadow-lg"
-              >
-                정지
-              </button>
-            )}
-          </div>
-
-          {/* 타이머 진행 바 */}
-          {isPlaying && (
-            <div className="mt-6">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-white font-semibold">남은 시간</span>
-                <span className="text-white font-bold text-lg">
-                  {Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}
-                </span>
-              </div>
-              <div className="w-full bg-slate-600 rounded-full h-4 overflow-hidden">
-                <div
-                  className="bg-gradient-to-r from-blue-500 to-green-500 h-4 transition-all duration-1000 ease-linear"
-                  style={{
-                    width: `${(timeRemaining / (duration * 60)) * 100}%`
-                  }}
-                ></div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 지판 시각화 */}
-        <div className="bg-slate-700 rounded-lg p-6 shadow-xl overflow-x-auto">
-          <h2 className="text-2xl font-bold text-white mb-4">
-            {selectedNote}{useSharp ? '#' : ''}{useFlat ? '♭' : ''} 위치
-          </h2>
-          
-          <div className="inline-block min-w-full">
-            {/* 프렛 번호 */}
-            <div className="flex mb-2 pl-12">
-              {[...Array(13)].map((_, i) => (
-                <div key={i} className="w-16 text-center text-gray-400 text-sm">
-                  {i}
-                </div>
-              ))}
-            </div>
-
-            {/* 줄과 프렛 */}
-            {[...Array(6)].map((_, stringIdx) => (
-              <div key={stringIdx} className="flex items-center mb-4">
-                <div className="w-12 text-white font-bold text-right pr-4">
-                  {stringIdx + 1}번줄
-                </div>
-                <div className="flex items-center flex-1 relative">
-                  <div className="absolute h-0.5 bg-gray-500 w-full"></div>
-                  {[...Array(13)].map((_, fret) => {
-                    const isTarget = positions.some(
-                      p => p.string === (5 - stringIdx) && p.fret === fret
-                    );
-                    const isCurrent = currentString === (5 - stringIdx) && currentFret === fret;
-                    
-                    return (
-                      <div key={fret} className="w-16 flex justify-center relative">
-                        {isTarget && (
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${
-                              isCurrent
-                                ? 'bg-yellow-400 text-black scale-125 shadow-lg'
-                                : 'bg-blue-400 text-white'
+          return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-8">
+              <div className="max-w-6xl mx-auto">
+                <h1 className="text-4xl font-bold text-white mb-8 text-center">
+                  기타 지판 연습기
+                </h1>
+                
+                <div className="bg-slate-700 rounded-lg p-6 mb-8 shadow-xl">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div>
+                      <label className="block text-white font-semibold mb-2">음 선택 *</label>
+                      <div className="grid grid-cols-7 gap-1">
+                        {['C', 'D', 'E', 'F', 'G', 'A', 'B'].map(note => (
+                          <button
+                            key={note}
+                            onClick={() => setSelectedNote(note)}
+                            className={`py-2 px-3 rounded font-bold transition ${
+                              selectedNote === note
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-slate-600 text-gray-300 hover:bg-slate-500'
                             }`}
                           >
-                            {fret}
-                          </div>
-                        )}
+                            {note}
+                          </button>
+                        ))}
                       </div>
-                    );
-                  })}
+                    </div>
+
+                    <div>
+                      <label className="block text-white font-semibold mb-2">변화표 (옵션)</label>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setUseSharp(!useSharp)}
+                          className={`flex-1 py-2 px-4 rounded font-bold transition ${
+                            useSharp
+                              ? 'bg-green-500 text-white'
+                              : 'bg-slate-600 text-gray-300 hover:bg-slate-500'
+                          }`}
+                        >
+                          # (Sharp)
+                        </button>
+                        <button
+                          onClick={() => setUseFlat(!useFlat)}
+                          className={`flex-1 py-2 px-4 rounded font-bold transition ${
+                            useFlat
+                              ? 'bg-green-500 text-white'
+                              : 'bg-slate-600 text-gray-300 hover:bg-slate-500'
+                          }`}
+                        >
+                          ♭ (Flat)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-white font-semibold mb-2">
+                        BPM: {bpm}
+                      </label>
+                      <input
+                        type="range"
+                        min="40"
+                        max="200"
+                        value={bpm}
+                        onChange={(e) => setBpm(Number(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-white font-semibold mb-2">
+                        연습 시간: {duration}분
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        value={duration}
+                        onChange={(e) => setDuration(Number(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-6 text-center">
+                    {!isPlaying ? (
+                      <button
+                        onClick={startPractice}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-xl transition shadow-lg"
+                      >
+                        시작
+                      </button>
+                    ) : (
+                      <button
+                        onClick={stopPractice}
+                        className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-lg text-xl transition shadow-lg"
+                      >
+                        정지
+                      </button>
+                    )}
+                  </div>
+
+                  {isPlaying && (
+                    <div className="mt-6">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-white font-semibold">남은 시간</span>
+                        <span className="text-white font-bold text-lg">
+                          {Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-600 rounded-full h-4 overflow-hidden">
+                        <div
+                          className="bg-gradient-to-r from-blue-500 to-green-500 h-4 transition-all duration-1000 ease-linear"
+                          style={{
+                            width: `${(timeRemaining / (duration * 60)) * 100}%`
+                          }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-slate-700 rounded-lg p-6 shadow-xl overflow-x-auto">
+                  <h2 className="text-2xl font-bold text-white mb-4">
+                    {selectedNote}{useSharp ? '#' : ''}{useFlat ? '♭' : ''} 위치
+                  </h2>
+                  
+                  <div className="inline-block min-w-full">
+                    <div className="flex mb-2 pl-12">
+                      {[...Array(13)].map((_, i) => (
+                        <div key={i} className="w-16 text-center text-gray-400 text-sm">
+                          {i}
+                        </div>
+                      ))}
+                    </div>
+
+                    {[...Array(6)].map((_, stringIdx) => (
+                      <div key={stringIdx} className="flex items-center mb-4">
+                        <div className="w-12 text-white font-bold text-right pr-4">
+                          {stringIdx + 1}번줄
+                        </div>
+                        <div className="flex items-center flex-1 relative">
+                          <div className="absolute h-0.5 bg-gray-500 w-full"></div>
+                          {[...Array(13)].map((_, fret) => {
+                            const isTarget = positions.some(
+                              p => p.string === (5 - stringIdx) && p.fret === fret
+                            );
+                            const isCurrent = currentString === (5 - stringIdx) && currentFret === fret;
+                            
+                            return (
+                              <div key={fret} className="w-16 flex justify-center relative">
+                                {isTarget && (
+                                  <div
+                                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${
+                                      isCurrent
+                                        ? 'bg-yellow-400 text-black scale-125 shadow-lg'
+                                        : 'bg-blue-400 text-white'
+                                    }`}
+                                  >
+                                    {fret}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+            </div>
+          );
+        };
 
-export default GuitarFretboardTrainer;
+        ReactDOM.render(<GuitarFretboardTrainer />, document.getElementById('root'));
     </script>
 </body>
 </html>
-
