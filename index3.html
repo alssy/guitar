@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>기타 지판 연습기 - 개선판</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        .fret-active {
+            animation: pulse 0.5s ease-in-out;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        .nut {
+            background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);
+        }
+        .fret-marker {
+            background: radial-gradient(circle at 30% 30%, #fbbf24, #f59e0b);
+        }
+        .progress-ring {
+            animation: progress-ring 1s ease-out forwards;
+        }
+        @keyframes progress-ring {
+            from { stroke-dashoffset: 283; }
+            to { stroke-dashoffset: var(--progress); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        const GuitarFretboardTrainer = () => {
+            // 상태 관리
+            const [selectedNote, setSelectedNote] = useState('C');
+            const [useSharp, setUseSharp] = useState(false);
+            const [useFlat, setUseFlat] = useState(false);
+            const [bpm, setBpm] = useState(60);
+            const [duration, setDuration] = useState(1);
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [currentString, setCurrentString] = useState(null);
+            const [currentFret, setCurrentFret] = useState(null);
+            const [direction, setDirection] = useState('ascending');
+            const [shouldStop, setShouldStop] = useState(false);
+            const [timeRemaining, setTimeRemaining] = useState(0);
+            const [scaleMode, setScaleMode] = useState('single'); // single, major, minor
+            const [fretRange, setFretRange] = useState({ min: 1, max: 12 });
+            const [patternType, setPatternType] = useState('ascending'); // ascending, descending, random, alternating
+            const [showHint, setShowHint] = useState(false);
+            const [practiceStats, setPracticeStats] = useState({
+                totalNotes: 0,
+                correctNotes: 0,
+                streak: 0,
+                maxStreak: 0
+            });
+            const [sessionHistory, setSessionHistory] = useState([]);
+            const [isAudioReady, setIsAudioReady] = useState(false);
+            const [metronomeEnabled, setMetronomeEnabled] = useState(true);
+            const [selectedScale, setSelectedScale] = useState('C'); // 메이저/마이너 스케일 기준음
+            const [scaleType, setScaleType] = useState('major'); // major, minor
+            
+            // 레퍼런스
+            const synthRef = useRef(null);
+            const clickRef = useRef(null);
+            const loopRef = useRef(null);
+            const beatCountRef = useRef(0);
+            const timerRef = useRef(null);
+            const intervalRef = useRef(null);
+            const audioContextRef = useRef(null);
+            const patternRef = useRef([]);
+            const currentPosIndexRef = useRef(0);
+            const lastPlayedTimeRef = useRef(0);
+
+            // 기타 현 튜닝 (1번현이 얇은 현, 6번현이 두꺼운 현)
+            const stringNotes = ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'];
+            
+            // 음표 정의
+            const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const notesFlat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+            
+            // 스케일 패턴 (메이저, 마이너)
+            const scalePatterns = {
+                major: [0, 2, 4, 5, 7, 9, 11], // C D E F G A B
+                minor: [0, 2, 3, 5, 7, 8, 10]   // C D Eb F G Ab Bb
+            };
+
+            // Sharp/Flat 핸들러 - 동시 선택 방지
+            const handleSharpClick = () => {
+                setUseSharp(!useSharp);
+                if (!useSharp && useFlat) setUseFlat(false);
+            };
+
+            const handleFlatClick = () => {
+                setUseFlat(!useFlat);
+                if (!useFlat && useSharp) setUseSharp(false);
+            };
+
+            // 오디오 초기화
+            useEffect(() => {
+                const initAudio = async () => {
+                    try {
+                        await Tone.start();
+                        audioContextRef.current = Tone.getContext();
+                        
+                        synthRef.current = new Tone.Synth({
+                            oscillator: { 
+                                type: 'triangle8',
+                                spread: 30
+                            },
+                            envelope: {
+                                attack: 0.005,
+                                decay: 0.1,
+                                sustain: 0.3,
+                                release: 1
+                            }
+                        }).toDestination();
+
+                        clickRef.current = new Tone.MembraneSynth({
+                            pitchDecay: 0.008,
+                            octaves: 2,
+                            envelope: {
+                                attack: 0.0006,
+                                decay: 0.05,
+                                sustain: 0,
+                                release: 0.1
+                            }
+                        }).toDestination();
+                        
+                        setIsAudioReady(true);
+                    } catch (error) {
+                        console.error('오디오 초기화 실패:', error);
+                    }
+                };
+
+                initAudio();
+
+                return () => {
+                    if (synthRef.current) {
+                        synthRef.current.dispose();
+                    }
+                    if (clickRef.current) {
+                        clickRef.current.dispose();
+                    }
+                    if (loopRef.current) {
+                        loopRef.current.dispose();
+                    }
+                    if (audioContextRef.current) {
+                        audioContextRef.current.close();
+                    }
+                };
+            }, []);
+
+            // 프렛 번호로 음표 계산
+            const getNoteFromFret = useCallback((stringIndex, fret) => {
+                const baseNote = stringNotes[stringIndex];
+                const noteName = baseNote.slice(0, -1);
+                const octave = parseInt(baseNote.slice(-1));
+                
+                const noteIndex = notes.indexOf(noteName);
+                const newNoteIndex = (noteIndex + fret) % 12;
+                const octaveShift = Math.floor((noteIndex + fret) / 12);
+                
+                return notes[newNoteIndex] + (octave + octaveShift);
+            }, []);
+
+            // 선택된 음/스케일에 맞는 프렛 위치 찾기
+            const findNotesOnFretboard = useCallback(() => {
+                const positions = [];
+                let targetNotes = [];
+
+                if (scaleMode === 'single') {
+                    // 단일 음 찾기
+                    let targetNote = selectedNote;
+                    
+                    if (useSharp && !selectedNote.includes('#') && selectedNote !== 'E' && selectedNote !== 'B') {
+                        const idx = notes.indexOf(selectedNote);
+                        targetNote = notes[idx + 1];
+                    } else if (useFlat && !selectedNote.includes('b') && selectedNote !== 'F' && selectedNote !== 'C') {
+                        const idx = notes.indexOf(selectedNote);
+                        targetNote = notesFlat[idx - 1];
+                    }
+                    targetNotes = [targetNote];
+                } else if (scaleMode === 'major' || scaleMode === 'minor') {
+                    // 스케일 음 찾기
+                    const scaleRootIndex = notes.indexOf(selectedScale);
+                    const pattern = scaleMode === 'major' ? scalePatterns.major : scalePatterns.minor;
+                    
+                    targetNotes = pattern.map(interval => {
+                        const noteIndex = (scaleRootIndex + interval) % 12;
+                        return notes[noteIndex];
+                    });
+                }
+
+                // 1번 프렛부터 12번 프렛까지만 검색 (개방현 제외)
+                for (let stringIdx = 0; stringIdx < 6; stringIdx++) {
+                    for (let fret = fretRange.min; fret <= fretRange.max; fret++) {
+                        const note = getNoteFromFret(stringIdx, fret);
+                        const noteName = note.slice(0, -1);
+                        
+                        if (targetNotes.includes(noteName) || 
+                            targetNotes.includes(notesFlat[notes.indexOf(noteName)])) {
+                            positions.push({ 
+                                string: stringIdx, 
+                                fret, 
+                                note,
+                                noteName: noteName
+                            });
+                        }
+                    }
+                }
+                
+                return positions;
+            }, [selectedNote, useSharp, useFlat, scaleMode, selectedScale, fretRange, getNoteFromFret]);
+
+            // 패턴 생성
+            const generatePattern = useCallback((positions) => {
+                let pattern = [];
+                
+                // 현별로 위치 그룹화
+                const positionsByString = {};
+                for (let i = 0; i < 6; i++) {
+                    positionsByString[i] = positions.filter(p => p.string === i)
+                        .sort((a, b) => a.fret - b.fret);
+                }
+                
+                switch (patternType) {
+                    case 'ascending':
+                        // 아래현(6번)에서 위현(1번)으로
+                        for (let s = 5; s >= 0; s--) {
+                            pattern.push(...positionsByString[s]);
+                        }
+                        break;
+                        
+                    case 'descending':
+                        // 위현(1번)에서 아래현(6번)으로
+                        for (let s = 0; s <= 5; s++) {
+                            pattern.push(...positionsByString[s]);
+                        }
+                        break;
+                        
+                    case 'alternating':
+                        // 위아래 번갈아가며
+                        const highStrings = [0, 1, 2]; // 얇은 현
+                        const lowStrings = [3, 4, 5]; // 두꺼운 현
+                        
+                        for (let i = 0; i < Math.max(highStrings.length, lowStrings.length); i++) {
+                            if (i < lowStrings.length) {
+                                pattern.push(...positionsByString[lowStrings[i]]);
+                            }
+                            if (i < highStrings.length) {
+                                pattern.push(...positionsByString[highStrings[i]]);
+                            }
+                        }
+                        break;
+                        
+                    case 'random':
+                        // 무작위 순서
+                        pattern = [...positions];
+                        for (let i = pattern.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [pattern[i], pattern[j]] = [pattern[j], pattern[i]];
+                        }
+                        break;
+                        
+                    case 'stringwise':
+                        // 현별로 모든 음 연주
+                        for (let s = 5; s >= 0; s--) {
+                            pattern.push(...positionsByString[s]);
+                        }
+                        for (let s = 0; s <= 5; s++) {
+                            pattern.push(...positionsByString[s].reverse());
+                        }
+                        break;
+                }
+                
+                return pattern;
+            }, [patternType]);
+
+            // 연습 시작
+            const startPractice = async () => {
+                if (!isAudioReady) {
+                    alert('오디오를 준비 중입니다. 잠시만 기다려주세요.');
+                    return;
+                }
+
+                try {
+                    await Tone.start();
+                    setIsPlaying(true);
+                    setShouldStop(false);
+                    setTimeRemaining(duration * 60);
+                    beatCountRef.current = 0;
+                    currentPosIndexRef.current = 0;
+                    
+                    // 통계 초기화
+                    setPracticeStats({
+                        totalNotes: 0,
+                        correctNotes: 0,
+                        streak: 0,
+                        maxStreak: 0
+                    });
+
+                    const allPositions = findNotesOnFretboard();
+                    
+                    if (allPositions.length === 0) {
+                        alert('선택한 음이 프렛보드에 없습니다. 설정을 변경해주세요.');
+                        setIsPlaying(false);
+                        return;
+                    }
+
+                    patternRef.current = generatePattern(allPositions);
+                    
+                    Tone.Transport.bpm.value = bpm;
+                    Tone.Transport.stop();
+                    
+                    if (loopRef.current) {
+                        loopRef.current.dispose();
+                    }
+
+                    loopRef.current = new Tone.Loop((time) => {
+                        beatCountRef.current++;
+                        
+                        // 메트로놈 클릭 (첫 4박)
+                        if (metronomeEnabled && beatCountRef.current <= 4) {
+                            clickRef.current.triggerAttackRelease('C2', '32n', time);
+                            return;
+                        }
+
+                        // 음표 연주
+                        if (patternRef.current.length > 0) {
+                            const pos = patternRef.current[currentPosIndexRef.current];
+                            
+                            setCurrentString(pos.string);
+                            setCurrentFret(pos.fret);
+                            
+                            // 통계 업데이트
+                            setPracticeStats(prev => ({
+                                ...prev,
+                                totalNotes: prev.totalNotes + 1,
+                                streak: prev.streak + 1,
+                                maxStreak: Math.max(prev.maxStreak, prev.streak + 1)
+                            }));
+
+                            // 음표 연주
+                            synthRef.current.triggerAttackRelease(pos.note, '8n', time);
+                            lastPlayedTimeRef.current = Tone.now();
+                            
+                            // 다음 위치로 이동
+                            currentPosIndexRef.current = (currentPosIndexRef.current + 1) % patternRef.current.length;
+                            
+                            // 종료 조건 체크
+                            if (currentPosIndexRef.current === 0 && shouldStop) {
+                                stopPractice();
+                            }
+                        }
+                    }, '4n').start(0);
+                    
+                    Tone.Transport.start();
+                    
+                    // 타이머 설정
+                    intervalRef.current = setInterval(() => {
+                        setTimeRemaining(prev => {
+                            if (prev <= 1) {
+                                setShouldStop(true);
+                                return 0;
+                            }
+                            return prev - 1;
+                        });
+                    }, 1000);
+
+                    timerRef.current = setTimeout(() => {
+                        setShouldStop(true);
+                    }, duration * 60 * 1000);
+
+                } catch (error) {
+                    console.error('연습 시작 오류:', error);
+                    setIsPlaying(false);
+                }
+            };
+
+            // 연습 정지
+            const stopPractice = useCallback(() => {
+                Tone.Transport.stop();
+                if (loopRef.current) {
+                    loopRef.current.stop();
+                    loopRef.current.dispose();
+                }
+                if (timerRef.current) {
+                    clearTimeout(timerRef.current);
+                }
+                if (intervalRef.current) {
+                    clearInterval(intervalRef.current);
+                }
+                
+                // 세션 기록 저장
+                if (practiceStats.totalNotes > 0) {
+                    const session = {
+                        date: new Date().toISOString(),
+                        note: selectedNote,
+                        scaleMode,
+                        duration,
+                        bpm,
+                        stats: { ...practiceStats },
+                        accuracy: practiceStats.totalNotes > 0 
+                            ? Math.round((practiceStats.correctNotes / practiceStats.totalNotes) * 100)
+                            : 0
+                    };
+                    setSessionHistory(prev => [session, ...prev.slice(0, 9)]);
+                }
+                
+                setIsPlaying(false);
+                setCurrentString(null);
+                setCurrentFret(null);
+                setShouldStop(false);
+                setTimeRemaining(0);
+                beatCountRef.current = 0;
+                currentPosIndexRef.current = 0;
+            }, [practiceStats, selectedNote, scaleMode, duration, bpm]);
+
+            // 키보드 단축키
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+                    
+                    switch(e.key) {
+                        case ' ':
+                            e.preventDefault();
+                            if (isPlaying) {
+                                stopPractice();
+                            } else {
+                                startPractice();
+                            }
+                            break;
+                        case 'ArrowUp':
+                            e.preventDefault();
+                            setBpm(prev => Math.min(prev + 5, 200));
+                            break;
+                        case 'ArrowDown':
+                            e.preventDefault();
+                            setBpm(prev => Math.max(prev - 5, 40));
+                            break;
+                        case 'h':
+                            setShowHint(prev => !prev);
+                            break;
+                    }
+                };
+
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [isPlaying, stopPractice, startPractice]);
+
+            // 컴포넌트 언마운트 시 정리
+            useEffect(() => {
+                return () => {
+                    stopPractice();
+                };
+            }, [stopPractice]);
+
+            const positions = findNotesOnFretboard();
+            const accuracy = practiceStats.totalNotes > 0 
+                ? Math.round((practiceStats.correctNotes / practiceStats.totalNotes) * 100)
+                : 100;
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 md:p-8">
+                    <div className="max-w-7xl mx-auto">
+                        {/* 헤더 */}
+                        <header className="mb-8 text-center">
+                            <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
+                                🎸 기타 지판 연습기
+                            </h1>
+                            <p className="text-gray-300">
+                                프렛 1번부터 12번까지 음표 위치 연습 (개방현 제외)
+                            </p>
+                            <div className="mt-2 text-sm text-gray-400">
+                                단축키: 스페이스바(시작/정지), ↑↓(BPM 조절), H(힌트 표시)
+                            </div>
+                        </header>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* 왼쪽 컨트롤 패널 */}
+                            <div className="lg:col-span-2 space-y-6">
+                                {/* 기본 설정 카드 */}
+                                <div className="bg-slate-700/50 backdrop-blur-sm rounded-xl p-6 shadow-2xl border border-slate-600">
+                                    <h2 className="text-xl font-bold text-white mb-4">기본 설정</h2>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {/* 음 선택 */}
+                                        <div>
+                                            <label className="block text-white font-semibold mb-2">음 선택 *</label>
+                                            <div className="grid grid-cols-7 gap-1">
+                                                {['C', 'D', 'E', 'F', 'G', 'A', 'B'].map(note => (
+                                                    <button
+                                                        key={note}
+                                                        onClick={() => setSelectedNote(note)}
+                                                        className={`py-2 px-3 rounded font-bold transition-all duration-200 ${
+                                                            selectedNote === note
+                                                                ? 'bg-blue-500 text-white shadow-lg scale-105'
+                                                                : 'bg-slate-600 text-gray-300 hover:bg-slate-500 hover:scale-102'
+                                                        }`}
+                                                    >
+                                                        {note}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* 변화표 */}
+                                        <div>
+                                            <label className="block text-white font-semibold mb-2">변화표</label>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={handleSharpClick}
+                                                    className={`flex-1 py-2 px-4 rounded font-bold transition-all ${
+                                                        useSharp
+                                                            ? 'bg-green-500 text-white shadow-lg'
+                                                            : 'bg-slate-600 text-gray-300 hover:bg-slate-500'
+                                                    }`}
+                                                >
+                                                    # (Sharp)
+                                                </button>
+                                                <button
+                                                    onClick={handleFlatClick}
+                                                    className={`flex-1 py-2 px-4 rounded font-bold transition-all ${
+                                                        useFlat
+                                                            ? 'bg-green-500 text-white shadow-lg'
+                                                            : 'bg-slate-600 text-gray-300 hover:bg-slate-500'
+                                                    }`}
+                                                >
+                                                    ♭ (Flat)
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* 스케일 모드 */}
+                                        <div>
+                                            <label className="block text-white font-semibold mb-2">연습 모드</label>
+                                            <select
+                                                value={scaleMode}
+                                                onChange={(e) => setScaleMode(e.target.value)}
+                                                className="w-full bg-slate-600 text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="single">단일 음</option>
+                                                <option value="major">메이저 스케일</option>
+                                                <option value="minor">마이너 스케일</option>
+                                            </select>
+                                            
+                                            {scaleMode !== 'single' && (
+                                                <div className="mt-2">
+                                                    <label className="block text-gray-300 text-sm mb-1">스케일 기준음</label>
+                                                    <select
+                                                        value={selectedScale}
+                                                        onChange={(e) => setSelectedScale(e.target.value)}
+                                                        className="w-full bg-slate-600 text-white rounded px-3 py-2 text-sm"
+                                                    >
+                                                        {notes.filter(n => !n.includes('#')).map(note => (
+                                                            <option key={note} value={note}>{note}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* BPM 설정 */}
+                                        <div>
+                                            <label className="block text-white font-semibold mb-2">
+                                                BPM: <span className="text-yellow-300">{bpm}</span>
+                                            </label>
+                                            <input
+                                                type="range"
+                                                min="40"
+                                                max="200"
+                                                value={bpm}
+                                                onChange={(e) => setBpm(Number(e.target.value))}
+                                                className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer slider"
+                                            />
+                                            <div className="flex justify-between text-xs text-gray-400 mt-1">
+                                                <span>느림</span>
+                                                <span>보통</span>
+                                                <span>빠름</span>
+                                            </div>
+                                        </div>
+
+                                        {/* 연습 시간 */}
+                                        <div>
+                                            <label className="block text-white font-semibold mb-2">
+                                                연습 시간: <span className="text-yellow-300">{duration}분</span>
+                                            </label>
+                                            <input
+                                                type="range"
+                                                min="1"
+                                                max="20"
+                                                value={duration}
+                                                onChange={(e) => setDuration(Number(e.target.value))}
+                                                className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer slider"
+                                            />
+                                        </div>
+
+                                        {/* 프렛 범위 */}
+                                        <div>
+                                            <label className="block text-white font-semibold mb-2">
+                                                프렛 범위: <span className="text-yellow-300">{fretRange.min}번 - {fretRange.max}번</span>
+                                            </label>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="range"
+                                                    min="1"
+                                                    max="12"
+                                                    value={fretRange.min}
+                                                    onChange={(e) => setFretRange(prev => ({
+                                                        ...prev,
+                                                        min: Math.min(Number(e.target.value), prev.max)
+                                                    }))}
+                                                    className="flex-1 h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer slider"
+                                                />
+                                                <span className="text-gray-300">~</span>
+                                                <input
+                                                    type="range"
+                                                    min="1"
+                                                    max="12"
+                                                    value={fretRange.max}
+                                                    onChange={(e) => setFretRange(prev => ({
+                                                        ...prev,
+                                                        max: Math.max(Number(e.target.value), prev.min)
+                                                    }))}
+                                                    className="flex-1 h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer slider"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 패턴 설정 */}
+                                    <div className="mt-6">
+                                        <label className="block text-white font-semibold mb-2">연습 패턴</label>
+                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                                            {['ascending', 'descending', 'alternating', 'random', 'stringwise'].map(type => (
+                                                <button
+                                                    key={type}
+                                                    onClick={() => setPatternType(type)}
+                                                    className={`py-2 px-3 rounded text-sm font-semibold transition-all ${
+                                                        patternType === type
+                                                            ? 'bg-purple-500 text-white shadow-lg'
+                                                            : 'bg-slate-600 text-gray-300 hover:bg-slate-500'
+                                                    }`}
+                                                >
+                                                    {type === 'ascending' && '아래→위'}
+                                                    {type === 'descending' && '위→아래'}
+                                                    {type === 'alternating' && '교차'}
+                                                    {type === 'random' && '무작위'}
+                                                    {type === 'stringwise' && '현별'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* 추가 옵션 */}
+                                    <div className="mt-6 flex flex-wrap gap-4">
+                                        <label className="flex items-center gap-2 text-white cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={metronomeEnabled}
+                                                onChange={(e) => setMetronomeEnabled(e.target.checked)}
+                                                className="w-4 h-4 text-blue-600 rounded"
+                                            />
+                                            메트로놈 사용
+                                        </label>
+                                        <label className="flex items-center gap-2 text-white cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={showHint}
+                                                onChange={(e) => setShowHint(e.target.checked)}
+                                                className="w-4 h-4 text-blue-600 rounded"
+                                            />
+                                            힌트 표시
+                                        </label>
+                                        <button
+                                            onClick={() => document.getElementById('help-modal')?.classList.remove('hidden')}
+                                            className="text-blue-400 hover:text-blue-300 underline"
+                                        >
+                                            도움말
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* 지판 표시 */}
+                                <div className="bg-slate-700/50 backdrop-blur-sm rounded-xl p-6 shadow-2xl border border-slate-600">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h2 className="text-xl font-bold text-white">
+                                            {scaleMode === 'single' 
+                                                ? `${selectedNote}${useSharp ? '#' : ''}${useFlat ? '♭' : ''} 위치`
+                                                : `${selectedScale} ${scaleMode === 'major' ? '메이저' : '마이너'} 스케일`
+                                            }
+                                        </h2>
+                                        <span className="text-gray-300">
+                                            총 {positions.length}개 위치
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="overflow-x-auto">
+                                        <div className="inline-block min-w-full">
+                                            {/* 프렛 번호 표시 */}
+                                            <div className="flex mb-2 pl-16">
+                                                <div className="w-16 text-center text-gray-400 text-sm font-bold nut rounded">
+                                                    넛
+                                                </div>
+                                                {[...Array(12)].map((_, i) => (
+                                                    <div key={i} className="w-12 text-center text-gray-400 text-sm font-bold">
+                                                        {i + 1}
+                                                        {(i === 2 || i === 4 || i === 6 || i === 8 || i === 11) && (
+                                                            <div className="w-1 h-1 bg-yellow-400 rounded-full mx-auto mt-1"></div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* 현별 프렛 표시 */}
+                                            {[...Array(6)].map((_, stringIdx) => {
+                                                const stringNumber = 6 - stringIdx; // 1번현이 위쪽
+                                                return (
+                                                    <div key={stringIdx} className="flex items-center mb-3">
+                                                        {/* 현 번호 */}
+                                                        <div className="w-12 text-white font-bold text-right pr-4">
+                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                                                currentString === stringIdx ? 'bg-yellow-400 text-black' : 'bg-slate-600'
+                                                            }`}>
+                                                                {stringNumber}
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        {/* 넛 */}
+                                                        <div className="w-16 flex justify-center">
+                                                            <div className="w-12 h-1 bg-gray-300 rounded-full relative">
+                                                                <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-1 h-3 bg-gray-400 rounded"></div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 프렛들 */}
+                                                        <div className="flex items-center flex-1 relative">
+                                                            <div className="absolute h-0.5 bg-gray-400 w-full"></div>
+                                                            {[...Array(12)].map((_, fret) => {
+                                                                const isTarget = positions.some(
+                                                                    p => p.string === stringIdx && p.fret === (fret + 1)
+                                                                );
+                                                                const isCurrent = currentString === stringIdx && currentFret === (fret + 1);
+                                                                const showMarker = (fret === 2 || fret === 4 || fret === 6 || fret === 8 || fret === 11);
+                                                                
+                                                                return (
+                                                                    <div key={fret} className="w-12 flex justify-center relative group">
+                                                                        {/* 프렛선 */}
+                                                                        <div className="absolute right-0 top-0 h-full w-0.5 bg-gray-600"></div>
+                                                                        
+                                                                        {/* 프렛 마커 */}
+                                                                        {showMarker && (
+                                                                            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                                                                                <div className="w-2 h-2 fret-marker rounded-full opacity-50"></div>
+                                                                            </div>
+                                                                        )}
+                                                                        
+                                                                        {/* 음표 위치 표시 */}
+                                                                        {isTarget && (
+                                                                            <div
+                                                                                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all duration-300 relative z-10 ${
+                                                                                    isCurrent
+                                                                                        ? 'bg-yellow-400 text-black shadow-lg scale-125 fret-active'
+                                                                                        : 'bg-blue-500/90 text-white shadow-md hover:scale-110'
+                                                                                }`}
+                                                                                title={`${stringNumber}번줄 ${fret + 1}프렛`}
+                                                                            >
+                                                                                {showHint ? (
+                                                                                    <div className="text-xs">{positions.find(p => p.string === stringIdx && p.fret === fret+1)?.noteName}</div>
+                                                                                ) : (
+                                                                                    fret + 1
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                        
+                                                                        {/* 프렛 번호 힌트 */}
+                                                                        <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                            {fret + 1}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 오른쪽 패널 */}
+                            <div className="space-y-6">
+                                {/* 컨트롤 버튼 */}
+                                <div className="bg-slate-700/50 backdrop-blur-sm rounded-xl p-6 shadow-2xl border border-slate-600">
+                                    <div className="text-center mb-6">
+                                        {!isPlaying ? (
+                                            <button
+                                                onClick={startPractice}
+                                                disabled={!isAudioReady}
+                                                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-8 rounded-xl text-xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {isAudioReady ? '🎵 연습 시작' : '오디오 준비 중...'}
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={stopPractice}
+                                                className="w-full bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white font-bold py-4 px-8 rounded-xl text-xl transition-all duration-300 shadow-lg hover:shadow-xl"
+                                            >
+                                                ⏹️ 연습 정지
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* 진행 상황 */}
+                                    {isPlaying && (
+                                        <div className="space-y-4">
+                                            <div className="text-center">
+                                                <div className="text-white font-semibold mb-2">남은 시간</div>
+                                                <div className="text-3xl font-bold text-yellow-300">
+                                                    {Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}
+                                                </div>
+                                            </div>
+                                            
+                                            <div>
+                                                <div className="flex justify-between mb-1">
+                                                    <span className="text-white text-sm">진행률</span>
+                                                    <span className="text-white text-sm">
+                                                        {Math.round(100 - (timeRemaining / (duration * 60)) * 100)}%
+                                                    </span>
+                                                </div>
+                                                <div className="w-full bg-slate-600 rounded-full h-3 overflow-hidden">
+                                                    <div
+                                                        className="bg-gradient-to-r from-blue-500 via-green-500 to-yellow-500 h-3 transition-all duration-1000 ease-out"
+                                                        style={{
+                                                            width: `${100 - (timeRemaining / (duration * 60)) * 100}%`
+                                                        }}
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                            
+                                            {/* 현재 연주 위치 */}
+                                            {currentString !== null && currentFret !== null && (
+                                                <div className="text-center p-4 bg-slate-600/50 rounded-lg">
+                                                    <div className="text-gray-300 mb-1">현재 연주 중</div>
+                                                    <div className="text-2xl font-bold text-white">
+                                                        {6 - currentString}번줄 • {currentFret}프렛
+                                                    </div>
+                                                    <div className="text-gray-400 text-sm mt-1">
+                                                        다음 음까지: {(60 / bpm).toFixed(2)}초
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 통계 */}
+                                <div className="bg-slate-700/50 backdrop-blur-sm rounded-xl p-6 shadow-2xl border border-slate-600">
+                                    <h3 className="text-lg font-bold text-white mb-4">📊 연습 통계</h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="text-center p-3 bg-slate-600/50 rounded-lg">
+                                            <div className="text-gray-300 text-sm">정확도</div>
+                                            <div className="text-2xl font-bold text-green-400">{accuracy}%</div>
+                                        </div>
+                                        <div className="text-center p-3 bg-slate-600/50 rounded-lg">
+                                            <div className="text-gray-300 text-sm">연속 정답</div>
+                                            <div className="text-2xl font-bold text-yellow-400">{practiceStats.streak}</div>
+                                        </div>
+                                        <div className="text-center p-3 bg-slate-600/50 rounded-lg">
+                                            <div className="text-gray-300 text-sm">최대 연속</div>
+                                            <div className="text-2xl font-bold text-purple-400">{practiceStats.maxStreak}</div>
+                                        </div>
+                                        <div className="text-center p-3 bg-slate-600/50 rounded-lg">
+                                            <div className="text-gray-300 text-sm">총 음표</div>
+                                            <div className="text-2xl font-bold text-blue-400">{practiceStats.totalNotes}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* 진행률 링 */}
+                                    <div className="mt-6 flex justify-center">
+                                        <div className="relative w-32 h-32">
+                                            <svg className="w-full h-full" viewBox="0 0 100 100">
+                                                <circle
+                                                    cx="50"
+                                                    cy="50"
+                                                    r="45"
+                                                    fill="none"
+                                                    stroke="#334155"
+                                                    strokeWidth="8"
+                                                />
+                                                <circle
+                                                    cx="50"
+                                                    cy="50"
+                                                    r="45"
+                                                    fill="none"
+                                                    stroke="url(#gradient)"
+                                                    strokeWidth="8"
+                                                    strokeLinecap="round"
+                                                    strokeDasharray="283"
+                                                    strokeDashoffset={283 - (accuracy * 283 / 100)}
+                                                    style={{transition: 'stroke-dashoffset 1s ease-out'}}
+                                                />
+                                                <defs>
+                                                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                        <stop offset="0%" stopColor="#3b82f6" />
+                                                        <stop offset="100%" stopColor="#10b981" />
+                                                    </linearGradient>
+                                                </defs>
+                                            </svg>
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <div className="text-center">
+                                                    <div className="text-2xl font-bold text-white">{accuracy}%</div>
+                                                    <div className="text-xs text-gray-400">정확도</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 연습 기록 */}
+                                <div className="bg-slate-700/50 backdrop-blur-sm rounded-xl p-6 shadow-2xl border border-slate-600">
+                                    <h3 className="text-lg font-bold text-white mb-4">📝 최근 연습 기록</h3>
+                                    <div className="space-y-3 max-h-60 overflow-y-auto">
+                                        {sessionHistory.length > 0 ? (
+                                            sessionHistory.map((session, idx) => (
+                                                <div key={idx} className="p-3 bg-slate-600/30 rounded-lg">
+                                                    <div className="flex justify-between">
+                                                        <span className="text-white font-semibold">
+                                                            {session.note}
+                                                            {session.scaleMode !== 'single' && ` ${session.scaleMode}`}
+                                                        </span>
+                                                        <span className="text-yellow-300">{session.accuracy}%</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                                                        <span>{new Date(session.date).toLocaleTimeString()}</span>
+                                                        <span>{session.duration}분 • {session.bpm} BPM</span>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center text-gray-400 py-4">
+                                                아직 연습 기록이 없습니다.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 도움말 모달 */}
+                        <div id="help-modal" className="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                            <div className="bg-slate-800 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-xl font-bold text-white">도움말</h3>
+                                    <button
+                                        onClick={() => document.getElementById('help-modal').classList.add('hidden')}
+                                        className="text-gray-400 hover:text-white text-2xl"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                                
+                                <div className="space-y-4 text-gray-300">
+                                    <div>
+                                        <h4 className="font-bold text-white mb-2">🎯 기본 사용법</h4>
+                                        <ul className="list-disc pl-5 space-y-1">
+                                            <li>음 선택 후 연습 시작 버튼을 누르면 해당 음의 위치를 연습합니다</li>
+                                            <li>프렛 1번부터 12번까지만 사용합니다 (개방현 제외)</li>
+                                            <li>BPM으로 연주 속도를 조절할 수 있습니다</li>
+                                            <li>연습 시간을 설정하면 자동으로 종료됩니다</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div>
+                                        <h4 className="font-bold text-white mb-2">🎸 연습 모드</h4>
+                                        <ul className="list-disc pl-5 space-y-1">
+                                            <li><strong>단일 음</strong>: 선택한 음 하나만 연습</li>
+                                            <li><strong>메이저 스케일</strong>: 선택한 음을 기준으로 메이저 스케일 연습</li>
+                                            <li><strong>마이너 스케일</strong>: 선택한 음을 기준으로 마이너 스케일 연습</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div>
+                                        <h4 className="font-bold text-white mb-2">🎵 연습 패턴</h4>
+                                        <ul className="list-disc pl-5 space-y-1">
+                                            <li><strong>아래→위</strong>: 6번줄(두꺼운 현)에서 1번줄(얇은 현)으로</li>
+                                            <li><strong>위→아래</strong>: 1번줄에서 6번줄로</li>
+                                            <li><strong>교차</strong>: 아래현과 위현을 번갈아 연주</li>
+                                            <li><strong>무작위</strong>: 위치를 랜덤 순서로 연주</li>
+                                            <li><strong>현별</strong>: 한 줄씩 모든 음을 연주</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div>
+                                        <h4 className="font-bold text-white mb-2">⌨️ 키보드 단축키</h4>
+                                        <ul className="list-disc pl-5 space-y-1">
+                                            <li><strong>스페이스바</strong>: 연습 시작/정지</li>
+                                            <li><strong>↑/↓ 화살표</strong>: BPM 증가/감소</li>
+                                            <li><strong>H</strong>: 힌트 표시 전환</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div className="pt-4 border-t border-slate-700">
+                                        <p className="text-sm text-gray-400">
+                                            Tip: 정기적인 연습이 중요합니다. 하루 15분씩 꾸준히 연습해보세요!
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<GuitarFretboardTrainer />, document.getElementById('root'));
+    </script>
+</body>
+</html>
