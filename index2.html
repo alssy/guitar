@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>기타 지판 연습기 - Minimal Dark</title>
+    <title>기타 지판 연습기 - Acoustic Edition</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -24,8 +24,9 @@
           const [currentString, setCurrentString] = useState(null);
           const [currentFret, setCurrentFret] = useState(null);
           const [timeRemaining, setTimeRemaining] = useState(0);
+          const [isLoaded, setIsLoaded] = useState(false);
           
-          const synthRef = useRef(null);
+          const samplerRef = useRef(null);
           const stickRef = useRef(null);
           const loopRef = useRef(null);
           const beatCountRef = useRef(0);
@@ -36,14 +37,28 @@
           const notesFlat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
           useEffect(() => {
-            synthRef.current = new Tone.PolySynth(Tone.Synth, {
-              oscillator: { type: 'triangle' },
-              envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
+            // 🎸 어쿠스틱 기타 느낌을 위한 샘플러 설정 (삼각형파 + 필터 + 엔벨로프 조합)
+            // 실제 샘플 파일 없이 가장 기타와 유사한 소리를 내도록 Synth를 정교하게 튜닝함
+            samplerRef.current = new Tone.PolySynth(Tone.Synth, {
+              oscillator: { type: "triangle8" },
+              envelope: {
+                attack: 0.02,
+                decay: 1.2,
+                sustain: 0.1,
+                release: 1.5
+              }
             }).toDestination();
+
+            // 소리를 약간 더 따뜻하게 만들기 위해 리버브 추가
+            const reverb = new Tone.Reverb(1.5).toDestination();
+            samplerRef.current.connect(reverb);
+
             stickRef.current = new Tone.MembraneSynth({
               pitchDecay: 0.001, octaves: 0.1, envelope: { attack: 0.0001, decay: 0.05, sustain: 0 }
             }).toDestination();
-            return () => [synthRef.current, stickRef.current, loopRef.current].forEach(ref => ref?.dispose());
+
+            setIsLoaded(true);
+            return () => [samplerRef.current, stickRef.current, loopRef.current].forEach(ref => ref?.dispose());
           }, []);
 
           const getNoteFromFret = (stringIndex, fret) => {
@@ -76,7 +91,7 @@
             loopRef.current = new Tone.Loop((time) => {
               beatCountRef.current++;
               if (beatCountRef.current <= 4) {
-                stickRef.current.triggerAttackRelease('A5', '32n', time, 1.0);
+                stickRef.current.triggerAttackRelease('A5', '32n', time, 0.6);
                 return;
               }
               if (beatCountRef.current === 5) Tone.Draw.schedule(() => startTimer(), time);
@@ -91,7 +106,10 @@
                 if (nName === targetName || notesFlat[notes.indexOf(nName)] === targetName) {
                   foundFret = f;
                   Tone.Draw.schedule(() => { setCurrentString(stringIdx); setCurrentFret(f); }, time);
-                  synthRef.current.triggerAttackRelease(noteWithOctave, '8n', time);
+                  
+                  // 기타 특유의 벨로시티(강약) 효과 추가
+                  const velocity = Math.random() * 0.2 + 0.6;
+                  samplerRef.current.triggerAttackRelease(noteWithOctave, '2n', time, velocity);
                   break;
                 }
               }
@@ -121,9 +139,9 @@
             <div className="min-h-screen text-white p-4 md:p-8 font-sans">
               <div className="max-w-5xl mx-auto">
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-xl font-black text-slate-500 italic">FRETBOARD MASTER</h1>
+                    <h1 className="text-xl font-black text-slate-600 italic tracking-widest">ACOUSTIC TRAINER</h1>
                     {isPlaying && (
-                        <div className="bg-slate-800 px-4 py-1 rounded-full border border-slate-700 font-mono text-xl font-bold">
+                        <div className="bg-slate-800 px-4 py-1 rounded-full border border-slate-700 font-mono text-xl font-bold text-yellow-500">
                             {Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}
                         </div>
                     )}
@@ -134,33 +152,34 @@
                     <div className="flex flex-wrap gap-1">
                       {['C','D','E','F','G','A','B'].map(n => (
                         <button key={n} onClick={() => setSelectedNote(n)} 
-                          className={`w-9 h-9 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
+                          className={`w-9 h-9 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-orange-700 text-white ring-2 ring-orange-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
                       ))}
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => setAccidental(accidental === '#' ? '' : '#')} className={`flex-1 rounded-lg font-bold transition ${accidental === '#' ? 'bg-green-600' : 'bg-slate-700'}`}>#</button>
-                    <button onClick={() => setAccidental(accidental === 'b' ? '' : 'b')} className={`flex-1 rounded-lg font-bold transition ${accidental === 'b' ? 'bg-green-600' : 'bg-slate-700'}`}>♭</button>
+                    <button onClick={() => setAccidental(accidental === '#' ? '' : '#')} className={`flex-1 rounded-lg font-bold transition ${accidental === '#' ? 'bg-orange-600' : 'bg-slate-700'}`}>#</button>
+                    <button onClick={() => setAccidental(accidental === 'b' ? '' : 'b')} className={`flex-1 rounded-lg font-bold transition ${accidental === 'b' ? 'bg-orange-600' : 'bg-slate-700'}`}>♭</button>
                   </div>
                   <div className="flex gap-2">
-                    <input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-1/2 bg-slate-900 p-2 rounded-lg text-center font-mono font-bold text-blue-400 border border-slate-700 outline-none" />
+                    <input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-1/2 bg-slate-900 p-2 rounded-lg text-center font-mono font-bold text-orange-400 border border-slate-700 outline-none" />
                     <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="w-1/2 bg-slate-700 p-2 rounded-lg font-bold text-xs outline-none">
                       {[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} MIN</option>)}
                     </select>
                   </div>
                   <button onClick={isPlaying ? stopPractice : startPractice} 
-                    className={`w-full py-3 rounded-xl font-black transition-all ${isPlaying ? 'bg-red-500' : 'bg-blue-600 shadow-lg shadow-blue-900/20'}`}>
+                    className={`w-full py-3 rounded-xl font-black transition-all ${isPlaying ? 'bg-red-600' : 'bg-orange-700 shadow-lg shadow-orange-900/20'}`}>
                     {isPlaying ? 'STOP' : 'START'}
                   </button>
                 </div>
 
-                <div className="bg-slate-800 p-10 rounded-3xl border border-slate-700 shadow-inner overflow-x-auto">
+                <div className="bg-slate-800 p-10 rounded-3xl border border-slate-700 shadow-inner overflow-x-auto relative">
                   <div className="min-w-[800px]">
                     {[0, 1, 2, 3, 4, 5].map((stringIdx) => {
                       return (
                         <div key={stringIdx} className="relative h-12 flex items-center">
                           <div className="w-4"></div> 
-                          <div className="flex-1 h-[2px] bg-slate-700 relative">
+                          {/* 기타 줄 굵기 표현: 1번줄(얇음) -> 6번줄(굵음) */}
+                          <div className="flex-1 relative" style={{ height: `${1 + stringIdx * 0.5}px`, backgroundColor: '#475569' }}>
                             {[...Array(12)].map((_, idx) => {
                               const fret = idx + 1;
                               const isCurrent = currentString === stringIdx && currentFret === fret;
@@ -170,11 +189,10 @@
                                 <div key={fret} className="absolute top-1/2 -translate-y-1/2" style={{left: `${((fret-1)/11)*100}%`}}>
                                   {isTarget && (
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center -translate-x-1/2 transition-all duration-150 
-                                      ${isCurrent ? 'bg-yellow-400 text-black scale-125 z-10 font-black shadow-[0_0_20px_rgba(250,204,21,0.7)]' : 'bg-slate-700/40 text-slate-500 border border-slate-700 font-bold opacity-20'}`}>
+                                      ${isCurrent ? 'bg-yellow-400 text-black scale-125 z-10 font-black shadow-[0_0_20px_rgba(250,204,21,0.7)]' : 'bg-slate-700/40 text-slate-500 border border-slate-700 font-bold opacity-10'}`}>
                                       {fret}
                                     </div>
                                   )}
-                                  {/* 🔍 파란색 선 제거: 이제 모든 세로선은 옅은 회색으로 통일 */}
                                   <div className={`h-12 w-[1px] absolute -translate-x-1/2 mt-6 bg-slate-700/50`}></div>
                                 </div>
                               );
