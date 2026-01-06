@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>기타 지판 연습기 - 리듬 & 진행바 모드</title>
+    <title>기타 지판 연습기 - Pro</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -17,8 +17,7 @@
 
         const GuitarFretboardTrainer = () => {
           const [selectedNote, setSelectedNote] = useState('C');
-          const [useSharp, setUseSharp] = useState(false);
-          const [useFlat, setUseFlat] = useState(false);
+          const [accidental, setAccidental] = useState(''); // '', '#', 'b'
           const [bpm, setBpm] = useState(60);
           const [duration, setDuration] = useState(1);
           const [isPlaying, setIsPlaying] = useState(false);
@@ -27,7 +26,7 @@
           const [timeRemaining, setTimeRemaining] = useState(0);
           
           const synthRef = useRef(null);
-          const clickRef = useRef(null);
+          const stickRef = useRef(null);
           const loopRef = useRef(null);
           const beatCountRef = useRef(0);
           const intervalRef = useRef(null);
@@ -41,8 +40,15 @@
               oscillator: { type: 'triangle' },
               envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
             }).toDestination();
-            clickRef.current = new Tone.MembraneSynth().toDestination();
-            return () => [synthRef.current, clickRef.current, loopRef.current].forEach(ref => ref?.dispose());
+
+            // 스틱 부딪히는 소리를 위한 설정
+            stickRef.current = new Tone.MembraneSynth({
+              pitchDecay: 0.001,
+              octaves: 0.1,
+              envelope: { attack: 0.0001, decay: 0.05, sustain: 0 }
+            }).toDestination();
+
+            return () => [synthRef.current, stickRef.current, loopRef.current].forEach(ref => ref?.dispose());
           }, []);
 
           const getNoteFromFret = (stringIndex, fret) => {
@@ -55,14 +61,14 @@
             return notes[newNoteIndex] + (octave + octaveShift);
           };
 
+          // 샵/플랫이 반영된 정확한 타겟 음 이름 가져오기
           const getTargetNoteName = () => {
-            let target = selectedNote;
-            if (useSharp && !selectedNote.includes('#') && !['E', 'B'].includes(selectedNote)) {
-                target = notes[(notes.indexOf(selectedNote) + 1) % 12];
-            } else if (useFlat && !selectedNote.includes('b') && !['F', 'C'].includes(selectedNote)) {
-                target = notes[(notes.indexOf(selectedNote) + 11) % 12];
-            }
-            return target;
+            let fullNote = selectedNote + accidental;
+            if (fullNote === 'E#' ) return 'F';
+            if (fullNote === 'B#' ) return 'C';
+            if (fullNote === 'Fb' ) return 'E';
+            if (fullNote === 'Cb' ) return 'B';
+            return fullNote;
           };
 
           const startPractice = async () => {
@@ -71,7 +77,7 @@
             setTimeRemaining(duration * 60);
             beatCountRef.current = 0;
             
-            const targetNoteName = getTargetNoteName();
+            const targetName = getTargetNoteName();
             const stringPattern = [6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6]; 
             let patternStep = 0;
 
@@ -81,17 +87,25 @@
               beatCountRef.current++;
               
               if (beatCountRef.current <= 4) {
-                clickRef.current.triggerAttackRelease('G2', '32n', time, 0.4);
+                // 🥁 스틱 소리 (프리비트)
+                stickRef.current.triggerAttackRelease('A5', '32n', time, 1.0);
                 return;
               }
 
-              const currentStringNum = stringPattern[patternStep];
-              const stringIdx = currentStringNum - 1;
-              
+              // 실제 연습 시작 시점에 타이머 작동을 위한 간접 호출 (첫 시작시에만)
+              if (beatCountRef.current === 5) {
+                Tone.Draw.schedule(() => startTimer(), time);
+              }
+
+              const stringIdx = stringPattern[patternStep] - 1;
               let foundFret = -1;
-              for (let f = 12; f >= 1; f--) { // 12프렛 우선 탐색
+
+              // 12프렛부터 탐색
+              for (let f = 12; f >= 1; f--) {
                 const noteWithOctave = getNoteFromFret(stringIdx, f);
-                if (noteWithOctave.slice(0, -1) === targetNoteName || notesFlat[notes.indexOf(noteWithOctave.slice(0, -1))] === targetNoteName) {
+                const nName = noteWithOctave.slice(0, -1);
+                // Sharp 배열과 Flat 배열 모두에서 체크
+                if (nName === targetName || notesFlat[notes.indexOf(nName)] === targetName) {
                   foundFret = f;
                   Tone.Draw.schedule(() => { setCurrentString(stringIdx); setCurrentFret(f); }, time);
                   synthRef.current.triggerAttackRelease(noteWithOctave, '8n', time);
@@ -99,11 +113,11 @@
                 }
               }
 
-              if (foundFret === -1) { // 12프렛에 없으면 개방현 확인
+              if (foundFret === -1) {
                 const openNote = getNoteFromFret(stringIdx, 0);
-                if (openNote.slice(0, -1) === targetNoteName) {
-                    Tone.Draw.schedule(() => { setCurrentString(stringIdx); setCurrentFret(0); }, time);
-                    synthRef.current.triggerAttackRelease(openNote, '8n', time);
+                if (openNote.slice(0, -1) === targetName || notesFlat[notes.indexOf(openNote.slice(0, -1))] === targetName) {
+                  Tone.Draw.schedule(() => { setCurrentString(stringIdx); setCurrentFret(0); }, time);
+                  synthRef.current.triggerAttackRelease(openNote, '8n', time);
                 }
               }
 
@@ -111,7 +125,10 @@
             }, '4n').start(0);
             
             Tone.Transport.start();
-            
+          };
+
+          const startTimer = () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
             intervalRef.current = setInterval(() => {
               setTimeRemaining(prev => {
                 if (prev <= 1) { stopPractice(); return 0; }
@@ -133,64 +150,71 @@
           const targetNoteDisplay = getTargetNoteName();
 
           return (
-            <div className="min-h-screen bg-slate-900 text-white p-8">
+            <div className="min-h-screen bg-slate-900 text-white p-8 font-sans">
               <div className="max-w-5xl mx-auto">
-                <h1 className="text-3xl font-bold mb-8 text-center text-blue-400">기타 지판 연습기 (12프렛 타겟)</h1>
+                <h1 className="text-3xl font-black mb-8 text-center text-blue-400 tracking-tighter">GUITAR FRETBOARD TRAINER PRO</h1>
                 
-                <div className="bg-slate-800 p-6 rounded-xl shadow-2xl mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 border border-slate-700">
+                <div className="bg-slate-800 p-6 rounded-2xl shadow-2xl mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 border border-slate-700">
                   <div>
-                    <label className="block text-sm font-medium mb-2">음 선택</label>
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase">Note</label>
                     <div className="flex flex-wrap gap-1">
                       {['C','D','E','F','G','A','B'].map(n => (
                         <button key={n} onClick={() => setSelectedNote(n)} 
-                          className={`w-10 h-10 rounded font-bold ${selectedNote === n ? 'bg-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
+                          className={`w-10 h-10 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">변화표</label>
+                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase">Accidental</label>
                     <div className="flex gap-2">
-                      <button onClick={() => {setUseSharp(!useSharp); setUseFlat(false)}} className={`px-4 py-2 rounded font-bold transition ${useSharp ? 'bg-green-600' : 'bg-slate-700'}`}>#</button>
-                      <button onClick={() => {setUseFlat(!useFlat); setUseSharp(false)}} className={`px-4 py-2 rounded font-bold transition ${useFlat ? 'bg-green-600' : 'bg-slate-700'}`}>♭</button>
+                      <button onClick={() => setAccidental(accidental === '#' ? '' : '#')} className={`flex-1 py-2 rounded-lg font-bold transition ${accidental === '#' ? 'bg-green-600 ring-2 ring-green-400' : 'bg-slate-700'}`}>#</button>
+                      <button onClick={() => setAccidental(accidental === 'b' ? '' : 'b')} className={`flex-1 py-2 rounded-lg font-bold transition ${accidental === 'b' ? 'bg-green-600 ring-2 ring-green-400' : 'bg-slate-700'}`}>♭</button>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">BPM: {bpm}</label>
-                    <input type="range" min="40" max="180" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-full accent-blue-500" />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">BPM: {bpm}</label>
+                      <input type="range" min="40" max="180" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-full accent-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-1 uppercase">Time (Min)</label>
+                      <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="w-full bg-slate-700 p-2 rounded-lg font-bold outline-none border border-slate-600">
+                        {[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} Minute{m>1?'s':''}</option>)}
+                      </select>
+                    </div>
                   </div>
                   <div className="flex items-end">
                     <button onClick={isPlaying ? stopPractice : startPractice} 
-                      className={`w-full py-3 rounded-lg font-bold text-xl transition-all duration-300 ${isPlaying ? 'bg-red-500 hover:bg-red-600 shadow-lg' : 'bg-blue-600 hover:bg-blue-500 shadow-lg'}`}>
+                      className={`w-full py-4 rounded-xl font-black text-xl transition-all duration-300 ${isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-500'}`}>
                       {isPlaying ? 'STOP' : 'START'}
                     </button>
                   </div>
                 </div>
 
-                {/* ⏱ 진행 상태 바 (복구됨) */}
+                {/* 진행 바 */}
                 {isPlaying && (
-                  <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 mb-8 animate-fade-in">
+                  <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-8">
                     <div className="flex justify-between items-center mb-4">
-                      <span className="text-blue-400 font-bold tracking-widest uppercase">Practice Progress</span>
-                      <span className="text-2xl font-mono text-white">
-                        {Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}
-                      </span>
+                      <span className="text-blue-400 font-bold uppercase text-sm tracking-widest">{beatCountRef.current <= 4 ? "Ready..." : "In Progress"}</span>
+                      <span className="text-3xl font-mono font-bold">{Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}</span>
                     </div>
                     <div className="w-full bg-slate-700 rounded-full h-4 overflow-hidden border border-slate-600 shadow-inner">
                       <div 
-                        className="bg-gradient-to-r from-blue-600 via-blue-400 to-cyan-400 h-full transition-all duration-1000 ease-linear shadow-[0_0_15px_rgba(59,130,246,0.6)]"
+                        className={`h-full transition-all duration-1000 ease-linear ${beatCountRef.current <= 4 ? 'bg-slate-500' : 'bg-gradient-to-r from-blue-600 to-cyan-400 shadow-[0_0_15px_rgba(59,130,246,0.6)]'}`}
                         style={{ width: `${(timeRemaining / (duration * 60)) * 100}%` }}
                       ></div>
                     </div>
                   </div>
                 )}
 
-                <div className="bg-slate-800 p-8 rounded-xl overflow-x-auto border border-slate-700 shadow-2xl relative">
+                {/* 지판 시각화 */}
+                <div className="bg-slate-800 p-8 rounded-2xl overflow-x-auto border border-slate-700 shadow-2xl relative">
                   <div className="min-w-[800px]">
                     {[...Array(6)].map((_, i) => {
                       const stringIdx = 5 - i; 
                       return (
                         <div key={stringIdx} className="relative h-14 flex items-center">
-                          <div className="w-16 font-bold text-slate-500 text-sm uppercase">{stringIdx + 1} String</div>
+                          <div className="w-20 font-bold text-slate-500 text-xs uppercase">{stringIdx + 1} String</div>
                           <div className="flex-1 h-[3px] bg-slate-600 relative mx-4">
                             {[...Array(13)].map((_, fret) => {
                               const isCurrent = currentString === stringIdx && currentFret === fret;
@@ -199,12 +223,12 @@
                               return (
                                 <div key={fret} className="absolute top-1/2 -translate-y-1/2" style={{left: `${(fret/12)*100}%`}}>
                                   {isTarget && (
-                                    <div className={`w-9 h-9 rounded-full flex items-center justify-center -translate-x-1/2 transition-all duration-200 shadow-xl
-                                      ${isCurrent ? 'bg-yellow-400 text-black scale-125 z-10 font-black shadow-yellow-400/50' : 'bg-slate-700 text-slate-400 border border-slate-500 font-bold opacity-60'}`}>
+                                    <div className={`w-9 h-9 rounded-full flex items-center justify-center -translate-x-1/2 transition-all duration-200 
+                                      ${isCurrent ? 'bg-yellow-400 text-black scale-125 z-10 font-black shadow-[0_0_20px_rgba(250,204,21,0.6)]' : 'bg-slate-700 text-slate-400 border border-slate-500 font-bold opacity-40'}`}>
                                       {fret}
                                     </div>
                                   )}
-                                  <div className={`h-10 w-[2px] absolute -translate-x-1/2 mt-5 ${[3,5,7,9,12].includes(fret) ? 'bg-slate-400' : 'bg-slate-700/50'}`}></div>
+                                  <div className={`h-10 w-[2px] absolute -translate-x-1/2 mt-5 ${[3,5,7,9,12].includes(fret) ? 'bg-slate-500' : 'bg-slate-700/30'}`}></div>
                                 </div>
                               );
                             })}
