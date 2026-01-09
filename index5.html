@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>기타 지판 연습기 - Fast Load</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+</head>
+<body class="bg-slate-900 overflow-x-hidden">
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const GuitarFretboardTrainer = () => {
+          const [selectedNote, setSelectedNote] = useState('C');
+          const [accidental, setAccidental] = useState('');
+          const [bpm, setBpm] = useState(60);
+          const [duration, setDuration] = useState(1);
+          const [isPlaying, setIsPlaying] = useState(false);
+          const [currentString, setCurrentString] = useState(null);
+          const [currentFret, setCurrentFret] = useState(null);
+          const [timeRemaining, setTimeRemaining] = useState(0);
+          const [isLoaded, setIsLoaded] = useState(false);
+          
+          const synthRef = useRef(null);
+          const reverbRef = useRef(null);
+          const stickRef = useRef(null);
+          const loopRef = useRef(null);
+          const beatCountRef = useRef(0);
+          const intervalRef = useRef(null);
+          const wakeLockRef = useRef(null);
+          const shouldStopRef = useRef(false);
+
+          const stringNotes = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2']; 
+          const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+          const notesFlat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+          useEffect(() => {
+            // 리버브 설정
+            reverbRef.current = new Tone.Reverb({ decay: 1, wet: 0.2 }).toDestination();
+            
+            // 더 빠르고 안정적인 무료 샘플 서버 (혹은 기본 신디사이저 백업)
+            synthRef.current = new Tone.Sampler({
+              urls: { 
+                "A2": "A2.mp3", "C3": "C3.mp3", "E3": "E3.mp3", 
+                "G3": "G3.mp3", "A3": "A3.mp3", "C4": "C4.mp3" 
+              },
+              baseUrl: "https://tonejs.github.io/audio/salamander/", // 공식 경로
+              onload: () => {
+                console.log("Samples Loaded");
+                setIsLoaded(true);
+              },
+              onerror: () => {
+                console.warn("샘플 로딩 실패 - 기본 음원으로 대체합니다.");
+                // 로딩 실패 시 즉시 기본 음원으로 대체
+                synthRef.current = new Tone.PolySynth(Tone.Synth).connect(reverbRef.current);
+                setIsLoaded(true); 
+              }
+            }).connect(reverbRef.current);
+
+            // 타임아웃 설정: 3초 내에 로딩 안되면 그냥 시작 가능하게 함 (기본음 사용)
+            setTimeout(() => { if(!isLoaded) setIsLoaded(true); }, 3000);
+
+            stickRef.current = new Tone.MembraneSynth({
+              pitchDecay: 0.001, octaves: 0.1, envelope: { attack: 0.0001, decay: 0.05, sustain: 0 }
+            }).toDestination();
+            
+            return () => {
+              forceStop();
+              [synthRef.current, reverbRef.current, stickRef.current, loopRef.current].forEach(ref => ref?.dispose());
+            };
+          }, []);
+
+          const getNoteFromFret = (stringIndex, fret) => {
+            const baseNote = stringNotes[stringIndex];
+            const noteName = baseNote.slice(0, -1);
+            const octave = parseInt(baseNote.slice(-1));
+            const noteIndex = notes.indexOf(noteName);
+            const newNoteIndex = (noteIndex + fret) % 12;
+            const octaveShift = Math.floor((noteIndex + fret) / 12);
+            return notes[newNoteIndex] + (octave + octaveShift);
+          };
+
+          const getTargetNoteName = () => {
+            let fullNote = selectedNote + accidental;
+            const exceptions = { 'E#': 'F', 'B#': 'C', 'Fb': 'E', 'Cb': 'B' };
+            return exceptions[fullNote] || fullNote;
+          };
+
+          const startPractice = async () => {
+            await Tone.start();
+            
+            shouldStopRef.current = false;
+            setIsPlaying(true);
+            setTimeRemaining(duration * 60);
+            beatCountRef.current = 0;
+            
+            const targetName = getTargetNoteName();
+            const stringPattern = [6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6]; 
+            let patternStep = 0;
+
+            Tone.Transport.bpm.value = bpm;
+            loopRef.current = new Tone.Loop((time) => {
+              beatCountRef.current++;
+              
+              if (beatCountRef.current <= 4) {
+                stickRef.current.triggerAttackRelease('A5', '32n', time, 0.4);
+                return;
+              }
+              
+              if (beatCountRef.current === 5) Tone.Draw.schedule(() => startTimer(), time);
+
+              // 종료 조건: 시간이 다 됐고 한 사이클(patternStep 0)이 돌아왔을 때
+              if (shouldStopRef.current && patternStep === 0) {
+                Tone.Draw.schedule(() => forceStop(), time);
+                return;
+              }
+
+              const currentStringNum = stringPattern[patternStep];
+              const stringIdx = 6 - currentStringNum; 
+              
+              for (let f = 12; f >= 1; f--) {
+                const noteWithOctave = getNoteFromFret(stringIdx, f);
+                const nName = noteWithOctave.slice(0, -1);
+                if (nName === targetName || notesFlat[notes.indexOf(nName)] === targetName) {
+                  Tone.Draw.schedule(() => { setCurrentString(stringIdx); setCurrentFret(f); }, time);
+                  if(synthRef.current) synthRef.current.triggerAttackRelease(noteWithOctave, '2n', time);
+                  break;
+                }
+              }
+              patternStep = (patternStep + 1) % stringPattern.length;
+            }, '4n').start(0);
+            
+            Tone.Transport.start();
+          };
+
+          const startTimer = () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            intervalRef.current = setInterval(() => {
+              setTimeRemaining(prev => {
+                if (prev <= 1) {
+                  shouldStopRef.current = true;
+                  clearInterval(intervalRef.current);
+                  return 0;
+                }
+                return prev - 1;
+              });
+            }, 1000);
+          };
+
+          const forceStop = () => {
+            Tone.Transport.stop();
+            if (loopRef.current) { loopRef.current.stop(); loopRef.current = null; }
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            setIsPlaying(false);
+            setCurrentString(null);
+            setCurrentFret(null);
+          };
+
+          return (
+            <div className="min-h-screen text-white p-4 md:p-8 font-sans">
+              <div className="max-w-5xl mx-auto">
+                <div className="flex justify-between items-center mb-6">
+                    <h1 className="text-xl font-black text-slate-500 italic uppercase">Fretboard Trainer</h1>
+                    {isPlaying && (
+                        <div className={`px-4 py-1 rounded-full border font-mono text-xl font-bold ${shouldStopRef.current ? 'bg-red-900 text-red-200' : 'bg-slate-800 text-blue-400'}`}>
+                            {shouldStopRef.current ? "LAST ROUND" : `${Math.floor(timeRemaining / 60)}:${String(timeRemaining % 60).padStart(2, '0')}`}
+                        </div>
+                    )}
+                </div>
+                
+                <div className="bg-slate-800 p-6 rounded-2xl shadow-2xl mb-8 grid grid-cols-1 md:grid-cols-4 gap-4 border border-slate-700">
+                  <div className="md:col-span-1 flex flex-wrap gap-1">
+                      {['C','D','E','F','G','A','B'].map(n => (
+                        <button key={n} onClick={() => setSelectedNote(n)} 
+                          className={`w-9 h-9 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 ring-2 ring-blue-400' : 'bg-slate-700'}`}>{n}</button>
+                      ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setAccidental(accidental === '#' ? '' : '#')} className={`flex-1 rounded-lg font-bold ${accidental === '#' ? 'bg-green-600' : 'bg-slate-700'}`}>#</button>
+                    <button onClick={() => setAccidental(accidental === 'b' ? '' : 'b')} className={`flex-1 rounded-lg font-bold ${accidental === 'b' ? 'bg-green-600' : 'bg-slate-700'}`}>♭</button>
+                  </div>
+                  <div className="flex gap-2">
+                    <input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-1/2 bg-slate-900 p-2 rounded-lg text-center font-mono font-bold text-blue-400 border border-slate-700" />
+                    <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="w-1/2 bg-slate-700 p-2 rounded-lg font-bold text-xs">
+                      {[1,2,3,5].map(m => <option key={m} value={m}>{m} MIN</option>)}
+                    </select>
+                  </div>
+                  <button onClick={isPlaying ? forceStop : startPractice} 
+                    className={`w-full py-3 rounded-xl font-black transition-all ${isPlaying ? 'bg-red-500' : 'bg-blue-600'}`}>
+                    {isPlaying ? 'STOP NOW' : 'START'}
+                  </button>
+                </div>
+
+                <div className="bg-slate-800 p-6 md:p-10 rounded-3xl border border-slate-700 overflow-x-auto">
+                  <div className="min-w-[800px]">
+                    {[0, 1, 2, 3, 4, 5].map((stringIdx) => (
+                        <div key={stringIdx} className="relative h-12 flex items-center">
+                          <div className="w-8 text-xs font-bold text-slate-500">{6-stringIdx}</div> 
+                          <div className="flex-1 h-[2px] bg-slate-700 relative">
+                            {[...Array(12)].map((_, idx) => {
+                              const fret = idx + 1;
+                              const isCurrent = currentString === stringIdx && currentFret === fret;
+                              const noteName = getNoteFromFret(stringIdx, fret).slice(0,-1);
+                              const isTarget = noteName === getTargetNoteName() || notesFlat[notes.indexOf(noteName)] === getTargetNoteName();
+                              return (
+                                <div key={fret} className="absolute top-1/2 -translate-y-1/2" style={{left: `${((fret-1)/11)*100}%`}}>
+                                  {isTarget && (
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center -translate-x-1/2 transition-all 
+                                      ${isCurrent ? 'bg-yellow-400 text-black scale-125 z-10 font-black shadow-[0_0_20px_rgba(250,204,21,1)]' : 'bg-slate-700/20 text-slate-500 border border-slate-700/50 font-bold opacity-20'}`}>
+                                      {fret}
+                                    </div>
+                                  )}
+                                  <div className={`h-12 w-[1px] absolute -translate-x-1/2 mt-6 bg-slate-700/30`}></div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        ReactDOM.render(<GuitarFretboardTrainer />, document.getElementById('root'));
+    </script>
+</body>
+</html>
