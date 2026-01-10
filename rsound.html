@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>기타 지판 연습기 - 스마트 버튼 락</title>
+    <title>기타 지판 연습기 - 단축키 수정본</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -37,13 +37,18 @@
           const intervalRef = useRef(null);
           const stopRequestedRef = useRef(false);
 
+          // 최신 상태 유지를 위한 Refs
           const isPlayingRef = useRef(isPlaying);
           const isPausedRef = useRef(isPaused);
+          const isLoadedRef = useRef(isLoaded);
+          const configRef = useRef({ selectedNote, accidental, bpm, duration });
 
           useEffect(() => {
             isPlayingRef.current = isPlaying;
             isPausedRef.current = isPaused;
-          }, [isPlaying, isPaused]);
+            isLoadedRef.current = isLoaded;
+            configRef.current = { selectedNote, accidental, bpm, duration };
+          }, [isPlaying, isPaused, isLoaded, selectedNote, accidental, bpm, duration]);
 
           const stringNotes = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2']; 
           const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -62,20 +67,19 @@
             return () => { stopPractice(); samplerRef.current?.dispose(); stickRef.current?.dispose(); };
           }, []);
 
-          // 예외 음 조합 체크 함수
           const isSharpDisabled = (note) => note === 'E' || note === 'B';
           const isFlatDisabled = (note) => note === 'F' || note === 'C';
 
           const handleNoteSelect = (n) => {
-            if (isPlaying) return;
+            if (isPlayingRef.current) return;
             setSelectedNote(n);
-            // 선택한 음이 현재의 accidental과 맞지 않으면 초기화
             if (accidental === '#' && isSharpDisabled(n)) setAccidental('');
             if (accidental === 'b' && isFlatDisabled(n)) setAccidental('');
           };
 
           const handleShuffle = () => {
-            const filteredNotes = baseNotes.filter(n => n !== selectedNote);
+            const currentNote = configRef.current.selectedNote;
+            const filteredNotes = baseNotes.filter(n => n !== currentNote);
             const nextNote = filteredNotes[Math.floor(Math.random() * filteredNotes.length)];
             let nextAcc = '';
             if (isRandomAccidental) {
@@ -84,7 +88,7 @@
               if (!isFlatDisabled(nextNote)) validAccs.push('b');
               nextAcc = validAccs[Math.floor(Math.random() * validAccs.length)];
             } else {
-              nextAcc = accidental;
+              nextAcc = configRef.current.accidental;
             }
             setSelectedNote(nextNote);
             setAccidental(nextAcc);
@@ -101,14 +105,15 @@
           };
 
           const startPractice = async () => {
-            if (!isLoaded) return;
+            if (!isLoadedRef.current) return;
             await Tone.start();
             setIsPlaying(true); setIsPaused(false); stopRequestedRef.current = false;
-            setTimeRemaining(duration * 60); beatCountRef.current = 0;
-            const targetName = selectedNote + accidental;
+            setTimeRemaining(configRef.current.duration * 60); 
+            beatCountRef.current = 0;
+            const targetName = configRef.current.selectedNote + configRef.current.accidental;
             const stringPattern = [6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6]; 
             let patternStep = 0;
-            Tone.Transport.bpm.value = bpm;
+            Tone.Transport.bpm.value = configRef.current.bpm;
 
             loopRef.current = new Tone.Loop((time) => {
               beatCountRef.current++;
@@ -165,13 +170,17 @@
             }, 1000);
           };
 
+          // 🔥 수정된 단축키 useEffect
           useEffect(() => {
             const handleKeyDown = (e) => {
               if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
               if (e.code === 'Space') {
                 e.preventDefault();
-                if (!isPlayingRef.current) startPractice();
-                else isPausedRef.current ? resumePractice() : pausePractice();
+                if (!isPlayingRef.current) {
+                    if (isLoadedRef.current) startPractice();
+                } else {
+                    isPausedRef.current ? resumePractice() : pausePractice();
+                }
               }
               if (e.key.toLowerCase() === 'v') {
                 e.preventDefault();
@@ -180,7 +189,7 @@
             };
             window.addEventListener('keydown', handleKeyDown);
             return () => window.removeEventListener('keydown', handleKeyDown);
-          }, [selectedNote, accidental, bpm, duration]);
+          }, []); // 한 번만 등록
 
           return (
             <div className="min-h-screen p-4 md:p-8 font-sans touch-none select-none">
@@ -197,50 +206,23 @@
                     )}
                 </div>
                 
-                {/* 조작부 */}
                 <div className="bg-slate-800 p-6 rounded-2xl shadow-2xl mb-8 border border-slate-700">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                    
-                    {/* 음 선택 그룹 */}
                     <div className={`md:col-span-3 flex justify-center md:justify-start transition-all duration-300 ${isPlaying ? 'opacity-30 pointer-events-none grayscale' : 'opacity-100'}`}>
                       <div className="grid grid-cols-5 gap-1.5 w-fit">
                         {baseNotes.map(n => (
-                          <button key={n} onClick={() => handleNoteSelect(n)} 
-                            className={`w-10 h-10 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
+                          <button key={n} onClick={() => handleNoteSelect(n)} className={`w-10 h-10 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
                         ))}
-                        
-                        {/* 샵(#) 버튼: E, B일 때 비활성화 */}
-                        <button 
-                          disabled={isSharpDisabled(selectedNote)}
-                          onClick={() => setAccidental(accidental === '#' ? '' : '#')} 
-                          className={`w-10 h-10 rounded-lg font-bold transition-all 
-                            ${accidental === '#' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-400'}
-                            ${isSharpDisabled(selectedNote) ? 'opacity-20 cursor-not-allowed scale-90' : 'opacity-100'}`}>#</button>
-                        
-                        {/* 플랫(b) 버튼: F, C일 때 비활성화 */}
-                        <button 
-                          disabled={isFlatDisabled(selectedNote)}
-                          onClick={() => setAccidental(accidental === 'b' ? '' : 'b')} 
-                          className={`w-10 h-10 rounded-lg font-bold transition-all 
-                            ${accidental === 'b' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-400'}
-                            ${isFlatDisabled(selectedNote) ? 'opacity-20 cursor-not-allowed scale-90' : 'opacity-100'}`}>♭</button>
-                        
+                        <button disabled={isSharpDisabled(selectedNote)} onClick={() => setAccidental(accidental === '#' ? '' : '#')} className={`w-10 h-10 rounded-lg font-bold transition-all ${accidental === '#' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-400'} ${isSharpDisabled(selectedNote) ? 'opacity-20 cursor-not-allowed scale-90' : 'opacity-100'}`}>#</button>
+                        <button disabled={isFlatDisabled(selectedNote)} onClick={() => setAccidental(accidental === 'b' ? '' : 'b')} className={`w-10 h-10 rounded-lg font-bold transition-all ${accidental === 'b' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-400'} ${isFlatDisabled(selectedNote) ? 'opacity-20 cursor-not-allowed scale-90' : 'opacity-100'}`}>♭</button>
                         <button onClick={handleShuffle} className="w-10 h-10 rounded-lg flex items-center justify-center bg-indigo-600 text-white active:scale-95"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></button>
                       </div>
                     </div>
-
                     <div className="md:col-span-9 grid grid-cols-2 md:grid-cols-5 gap-3">
-                      <button onClick={() => setIsRandomAccidental(!isRandomAccidental)} disabled={isPlaying} 
-                        className={`rounded-xl text-[11px] font-black border py-3 transition-all ${isPlaying ? 'opacity-30 grayscale' : 'opacity-100'} ${isRandomAccidental ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-600'}`}>RAND<br/>ACC</button>
-                      
-                      {/* 프리뷰 버튼은 플레이 중에도 조작 가능하도록 유지하거나 선택적으로 제어 가능 */}
-                      <button onClick={() => setIsPreview(!isPreview)} 
-                        className={`rounded-xl text-[11px] font-black border py-3 transition-all ${isPreview ? 'bg-blue-600 border-blue-400 text-white shadow-lg' : 'bg-slate-900 border-slate-700 text-slate-600'}`}>PREV<br/>{isPreview ? 'ON' : 'OFF'}</button>
-                      
+                      <button onClick={() => setIsRandomAccidental(!isRandomAccidental)} disabled={isPlaying} className={`rounded-xl text-[11px] font-black border py-3 transition-all ${isPlaying ? 'opacity-30 grayscale' : 'opacity-100'} ${isRandomAccidental ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-600'}`}>RAND<br/>ACC</button>
+                      <button onClick={() => setIsPreview(!isPreview)} className={`rounded-xl text-[11px] font-black border py-3 transition-all ${isPreview ? 'bg-blue-600 border-blue-400 text-white shadow-lg' : 'bg-slate-900 border-slate-700 text-slate-600'}`}>PREV<br/>{isPreview ? 'ON' : 'OFF'}</button>
                       <div className={`md:col-span-1 transition-all ${isPlaying ? 'opacity-30 grayscale pointer-events-none' : ''}`}><input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} disabled={isPlaying} className="w-full h-full bg-slate-900 p-3 rounded-xl text-center font-mono font-bold text-blue-400 border border-slate-700 outline-none" /></div>
-                      
                       <div className={`md:col-span-1 transition-all ${isPlaying ? 'opacity-30 grayscale pointer-events-none' : ''}`}><select value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={isPlaying} className="w-full h-full bg-slate-700 p-3 rounded-xl font-bold text-sm outline-none cursor-pointer">{[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} MIN</option>)}</select></div>
-                      
                       <div className="col-span-2 md:col-span-1 flex gap-2">
                         {!isPlaying ? (<button onClick={startPractice} disabled={!isLoaded} className={`w-full rounded-xl font-black transition-all shadow-lg text-white text-lg ${isLoaded ? 'bg-blue-600 hover:bg-blue-500' : 'bg-slate-700 opacity-50'}`}>START</button>) : (
                           <div className="flex gap-2 w-full"><button onClick={isPaused ? resumePractice : pausePractice} className={`flex-[1.5] py-3 rounded-xl font-black ${isPaused ? 'bg-yellow-500 text-black' : 'bg-slate-700 text-white'}`}>{isPaused ? 'RESUME' : 'PAUSE'}</button><button onClick={stopPractice} className="flex-1 bg-red-500 py-3 rounded-xl font-black text-white text-[10px]">STOP</button></div>
@@ -250,7 +232,6 @@
                   </div>
                 </div>
 
-                {/* 지판 및 타겟 표시 생략 (이전과 동일)... */}
                 <div className="bg-slate-800 p-4 md:p-8 rounded-3xl border border-slate-700 shadow-inner relative overflow-hidden">
                   {isPaused && <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] z-30 flex items-center justify-center rounded-3xl"><span className="text-4xl font-black text-yellow-500 tracking-widest animate-pulse italic uppercase">Paused</span></div>}
                   <div className="relative pl-6 pr-2">
