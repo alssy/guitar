@@ -3,17 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>기타 지판 연습기 - 최종 보정 버전</title>
+    <title>기타 지판 연습기 - 자동 셔플 & 레이아웃 보정</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-    <style>
-        /* 스크롤바 숨기기 */
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    </style>
 </head>
 <body class="bg-slate-900 overflow-x-hidden text-slate-200">
     <div id="root"></div>
@@ -59,7 +54,6 @@
           }, []);
 
           const handleShuffle = () => {
-            if (isPlaying) return; 
             let nextNote = selectedNote;
             let nextAcc = accidental;
             const filtered = baseNotes.filter(n => n !== selectedNote);
@@ -120,7 +114,6 @@
                 }
               }
 
-              // 🔥 마지막 음도 불이 들어오게 보정: 상태 업데이트를 먼저 하고 종료 체크
               Tone.Draw.schedule(() => {
                 setCurrentString(stringIdx);
                 setCurrentFret(targetFret);
@@ -130,7 +123,6 @@
                 samplerRef.current.triggerAttackRelease(getNoteFromFret(stringIdx, targetFret), noteDuration, time);
               }
 
-              // 모든 줄을 다 돌았고 멈춰야 할 때
               if (stopRequestedRef.current && patternStep === stringPattern.length - 1) { 
                 Tone.Draw.schedule(() => stopPractice(), time + noteDuration); 
               }
@@ -158,6 +150,7 @@
             if (intervalRef.current) clearInterval(intervalRef.current);
             setIsPlaying(false); setIsPaused(false); setCurrentString(null); setCurrentFret(null);
             stopRequestedRef.current = false;
+            handleShuffle(); // 🔥 피니쉬/중단 후 자동으로 다음 음 랜덤 선택
           };
 
           const targetNoteDisplay = getTargetNoteName();
@@ -178,16 +171,15 @@
                 {/* 조작부 */}
                 <div className="bg-slate-800 p-6 rounded-2xl shadow-2xl mb-8 border border-slate-700">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                    
                     <div className={`md:col-span-3 flex justify-center md:justify-start transition-opacity ${isPlaying ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
                       <div className="grid grid-cols-5 gap-1.5 w-fit">
-                        {['C','D','E','F','G','A','B'].map(n => (
+                        {baseNotes.map(n => (
                           <button key={n} onClick={() => setSelectedNote(n)} disabled={isPlaying}
                             className={`w-10 h-10 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
                         ))}
                         <button onClick={() => setAccidental(accidental === '#' ? '' : '#')} disabled={isPlaying} className={`w-10 h-10 rounded-lg font-bold transition-all ${accidental === '#' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-400'}`}>#</button>
                         <button onClick={() => setAccidental(accidental === 'b' ? '' : 'b')} disabled={isPlaying} className={`w-10 h-10 rounded-lg font-bold transition-all ${accidental === 'b' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-400'}`}>♭</button>
-                        <button onClick={handleShuffle} disabled={isPlaying} className="w-10 h-10 rounded-lg flex items-center justify-center bg-indigo-600 text-white shadow-lg">
+                        <button onClick={handleShuffle} disabled={isPlaying} className="w-10 h-10 rounded-lg flex items-center justify-center bg-indigo-600 text-white shadow-lg active:scale-95">
                           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
                         </button>
                       </div>
@@ -198,17 +190,14 @@
                         className={`rounded-xl text-[11px] font-black transition-all border py-3 ${isPlaying ? 'opacity-40' : 'opacity-100'} ${isRandomAccidental ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-600'}`}>
                         RAND<br/>ACC
                       </button>
-                      
                       <div className={`md:col-span-1 transition-opacity ${isPlaying ? 'opacity-40' : 'opacity-100'}`}>
                         <input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} disabled={isPlaying} className="w-full h-full bg-slate-900 p-3 rounded-xl text-center font-mono font-bold text-blue-400 border border-slate-700 outline-none" />
                       </div>
-
                       <div className={`md:col-span-1 transition-opacity ${isPlaying ? 'opacity-40' : 'opacity-100'}`}>
                         <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={isPlaying} className="w-full h-full bg-slate-700 p-3 rounded-xl font-bold text-sm outline-none cursor-pointer">
                           {[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} MIN</option>)}
                         </select>
                       </div>
-
                       <div className="col-span-2 md:col-span-2 flex gap-2">
                         {!isPlaying ? (
                           <button onClick={startPractice} disabled={!isLoaded} className={`w-full rounded-xl font-black transition-all shadow-lg text-white text-lg ${isLoaded ? 'bg-blue-600 hover:bg-blue-500' : 'bg-slate-700 opacity-50'}`}>START</button>
@@ -223,10 +212,10 @@
                   </div>
                 </div>
 
-                {/* 지판 영역 - 스크롤바 제거 및 정렬 수정 */}
+                {/* 지판 영역 */}
                 <div className="bg-slate-800 p-4 md:p-8 rounded-3xl border border-slate-700 shadow-inner relative overflow-hidden">
                   {isPaused && (
-                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] z-20 flex items-center justify-center rounded-3xl">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] z-30 flex items-center justify-center rounded-3xl">
                         <span className="text-4xl font-black text-yellow-500 tracking-widest animate-pulse italic uppercase">Paused</span>
                     </div>
                   )}
@@ -234,8 +223,9 @@
                   <div className="relative">
                     {[0, 1, 2, 3, 4, 5].map((stringIdx) => (
                       <div key={stringIdx} className="relative h-12 flex items-center">
-                        <div className="w-6 text-[10px] font-bold text-slate-600">{stringIdx + 1}</div> 
-                        <div className="flex-1 relative bg-slate-700/30" style={{ height: `${1 + stringIdx * 0.5}px` }}>
+                        <div className="w-6 text-[10px] font-bold text-slate-600 z-10">{stringIdx + 1}</div> 
+                        {/* 기타 줄 */}
+                        <div className="flex-1 relative bg-slate-700/30 z-0" style={{ height: `${1 + stringIdx * 0.5}px` }}>
                           {[...Array(12)].map((_, idx) => {
                             const fret = idx + 1;
                             const isCurrent = currentString === stringIdx && currentFret === fret;
@@ -243,13 +233,16 @@
                             const isTarget = noteName === targetNoteDisplay || notesFlat[notes.indexOf(noteName)] === targetNoteDisplay;
                             return (
                               <div key={fret} className="absolute top-1/2" style={{left: `${(idx / 11) * 100}%`}}>
+                                {/* 프렛 세로줄 */}
+                                <div className="h-12 w-[1px] bg-slate-700/40 absolute top-[-24px] left-0 z-0"></div>
+                                
                                 {isTarget && (
-                                  <div className={`w-9 h-9 rounded-full flex items-center justify-center -translate-x-1/2 -translate-y-1/2 transition-all duration-150 
-                                    ${isCurrent ? 'bg-yellow-400 text-black scale-110 z-10 font-black shadow-[0_0_15px_rgba(250,204,21,0.6)]' : 'bg-slate-700/20 text-slate-500/30 font-bold border border-slate-700/50'}`}>
+                                  /* 노란색 버튼 - z-index와 배경색으로 줄을 덮음 */
+                                  <div className={`w-9 h-9 rounded-full flex items-center justify-center -translate-x-1/2 -translate-y-1/2 transition-all duration-150 z-20 
+                                    ${isCurrent ? 'bg-yellow-400 text-black scale-110 font-black shadow-[0_0_15px_rgba(250,204,21,0.6)]' : 'bg-slate-800 text-slate-500/30 font-bold border border-slate-700'}`}>
                                     {fret}
                                   </div>
                                 )}
-                                <div className="h-12 w-[1px] bg-slate-700/40 absolute top-[-24px] left-0"></div>
                               </div>
                             );
                           })}
@@ -258,7 +251,7 @@
                     ))}
                     
                     {/* 프렛 번호 표시부 */}
-                    <div className="flex ml-6 mt-4 border-t border-slate-700/50 pt-2">
+                    <div className="flex ml-6 mt-4 border-t border-slate-700/50 pt-2 z-10 relative">
                       {[...Array(12)].map((_, i) => (
                         <div key={i} className="flex-1 text-center text-[10px] font-black text-slate-500" style={{marginLeft: i===0 ? '-18px' : '0'}}>
                           {i + 1}
@@ -270,7 +263,7 @@
                 
                 <div className="mt-8 text-center">
                     <div className="inline-flex items-center gap-4 bg-slate-800/80 px-8 py-3 rounded-2xl border border-slate-700 shadow-xl">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Target</span>
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Next Target</span>
                         <span className="text-4xl font-black text-blue-400 drop-shadow-[0_0_10px_rgba(96,165,250,0.5)]">{selectedNote}{accidental}</span>
                     </div>
                 </div>
