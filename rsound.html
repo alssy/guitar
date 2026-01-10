@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>기타 지판 연습기 - 실제 기타 음원 적용</title>
+    <title>기타 지판 연습기 - 쾌속 로딩 버전</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -27,7 +27,7 @@
           const [currentString, setCurrentString] = useState(null);
           const [currentFret, setCurrentFret] = useState(null);
           const [timeRemaining, setTimeRemaining] = useState(0);
-          const [isLoaded, setIsLoaded] = useState(false); // 음원 로딩 상태
+          const [isLoaded, setIsLoaded] = useState(false);
           
           const samplerRef = useRef(null);
           const stickRef = useRef(null);
@@ -41,21 +41,15 @@
           const notesFlat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
           useEffect(() => {
-            // 🔥 실제 기타 샘플 음원 설정
+            // 🔥 로딩 속도 최적화: 최소한의 샘플만 사용
             samplerRef.current = new Tone.Sampler({
               urls: {
                 "A2": "A2.mp3",
-                "C3": "C3.mp3",
-                "E3": "E3.mp3",
-                "G3": "G3.mp3",
-                "A3": "A3.mp3",
                 "C4": "C4.mp3",
-                "E4": "E4.mp3"
+                "A4": "A4.mp3"
               },
-              baseUrl: "https://tonejs.github.io/audio/casio/", // 피아노/기타 느낌의 샘플
-              onload: () => {
-                setIsLoaded(true);
-              }
+              baseUrl: "https://tonejs.github.io/audio/salamander/", // Salamander Grand Piano (빠른 응답)
+              onload: () => setIsLoaded(true)
             }).toDestination();
 
             stickRef.current = new Tone.MembraneSynth({
@@ -119,7 +113,7 @@
                 if (nName === targetName || notesFlat[notes.indexOf(nName)] === targetName) {
                   foundFret = f;
                   Tone.Draw.schedule(() => { setCurrentString(stringIdx); setCurrentFret(f); }, time);
-                  samplerRef.current.triggerAttackRelease(noteWithOctave, '2n', time);
+                  samplerRef.current.triggerAttackRelease(noteWithOctave, '1n', time);
                   break;
                 }
               }
@@ -156,9 +150,9 @@
               <div className="max-w-5xl mx-auto">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-xl font-black text-slate-500 italic uppercase tracking-tighter">Fretboard Trainer</h1>
-                    {!isLoaded && <div className="text-xs text-yellow-500 animate-pulse font-bold">LOADING SAMPLES...</div>}
+                    {!isLoaded && <div className="text-xs text-yellow-500 animate-bounce font-bold">READYING SOUNDS...</div>}
                     {isPlaying && (
-                        <div className="bg-slate-800 px-4 py-1 rounded-full border border-slate-700 font-mono text-xl font-bold text-blue-400">
+                        <div className="bg-slate-800 px-4 py-1 rounded-full border border-slate-700 font-mono text-xl font-bold text-blue-400 shadow-lg shadow-blue-500/10">
                             {stopRequestedRef.current ? "FINISHING..." : `${Math.floor(timeRemaining / 60)}:${String(timeRemaining % 60).padStart(2, '0')}`}
                         </div>
                     )}
