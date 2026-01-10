@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>기타 지판 연습기 - 단축키 수정본</title>
+    <title>기타 지판 연습기 - 설정 저장 기능</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -17,12 +17,22 @@
 
         const GuitarFretboardTrainer = () => {
           const baseNotes = ['C','D','E','F','G','A','B'];
+          
+          // 로컬 스토리지에서 설정값 불러오기
+          const getSavedValue = (key, defaultValue) => {
+            const saved = localStorage.getItem(key);
+            return saved !== null ? JSON.parse(saved) : defaultValue;
+          };
+
           const [selectedNote, setSelectedNote] = useState(() => baseNotes[Math.floor(Math.random() * baseNotes.length)]);
           const [accidental, setAccidental] = useState('');
           const [isRandomAccidental, setIsRandomAccidental] = useState(false);
           const [isPreview, setIsPreview] = useState(true);
-          const [bpm, setBpm] = useState(40);
-          const [duration, setDuration] = useState(3);
+          
+          // 사용자 설정값 (저장된 값 우선)
+          const [bpm, setBpm] = useState(() => getSavedValue('guitar-trainer-bpm', 40));
+          const [duration, setDuration] = useState(() => getSavedValue('guitar-trainer-duration', 3));
+          
           const [isPlaying, setIsPlaying] = useState(false);
           const [isPaused, setIsPaused] = useState(false);
           const [currentString, setCurrentString] = useState(null);
@@ -37,11 +47,19 @@
           const intervalRef = useRef(null);
           const stopRequestedRef = useRef(false);
 
-          // 최신 상태 유지를 위한 Refs
           const isPlayingRef = useRef(isPlaying);
           const isPausedRef = useRef(isPaused);
           const isLoadedRef = useRef(isLoaded);
           const configRef = useRef({ selectedNote, accidental, bpm, duration });
+
+          // 설정값이 변경될 때마다 로컬 스토리지에 저장
+          useEffect(() => {
+            localStorage.setItem('guitar-trainer-bpm', JSON.stringify(bpm));
+          }, [bpm]);
+
+          useEffect(() => {
+            localStorage.setItem('guitar-trainer-duration', JSON.stringify(duration));
+          }, [duration]);
 
           useEffect(() => {
             isPlayingRef.current = isPlaying;
@@ -170,7 +188,6 @@
             }, 1000);
           };
 
-          // 🔥 수정된 단축키 useEffect
           useEffect(() => {
             const handleKeyDown = (e) => {
               if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
@@ -189,7 +206,7 @@
             };
             window.addEventListener('keydown', handleKeyDown);
             return () => window.removeEventListener('keydown', handleKeyDown);
-          }, []); // 한 번만 등록
+          }, []);
 
           return (
             <div className="min-h-screen p-4 md:p-8 font-sans touch-none select-none">
@@ -221,8 +238,17 @@
                     <div className="md:col-span-9 grid grid-cols-2 md:grid-cols-5 gap-3">
                       <button onClick={() => setIsRandomAccidental(!isRandomAccidental)} disabled={isPlaying} className={`rounded-xl text-[11px] font-black border py-3 transition-all ${isPlaying ? 'opacity-30 grayscale' : 'opacity-100'} ${isRandomAccidental ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-600'}`}>RAND<br/>ACC</button>
                       <button onClick={() => setIsPreview(!isPreview)} className={`rounded-xl text-[11px] font-black border py-3 transition-all ${isPreview ? 'bg-blue-600 border-blue-400 text-white shadow-lg' : 'bg-slate-900 border-slate-700 text-slate-600'}`}>PREV<br/>{isPreview ? 'ON' : 'OFF'}</button>
-                      <div className={`md:col-span-1 transition-all ${isPlaying ? 'opacity-30 grayscale pointer-events-none' : ''}`}><input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} disabled={isPlaying} className="w-full h-full bg-slate-900 p-3 rounded-xl text-center font-mono font-bold text-blue-400 border border-slate-700 outline-none" /></div>
-                      <div className={`md:col-span-1 transition-all ${isPlaying ? 'opacity-30 grayscale pointer-events-none' : ''}`}><select value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={isPlaying} className="w-full h-full bg-slate-700 p-3 rounded-xl font-bold text-sm outline-none cursor-pointer">{[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} MIN</option>)}</select></div>
+                      
+                      <div className={`md:col-span-1 transition-all ${isPlaying ? 'opacity-30 grayscale pointer-events-none' : ''}`}>
+                        <input type="number" value={bpm} onChange={(e) => setBpm(Number(e.target.value))} disabled={isPlaying} className="w-full h-full bg-slate-900 p-3 rounded-xl text-center font-mono font-bold text-blue-400 border border-slate-700 outline-none" />
+                      </div>
+                      
+                      <div className={`md:col-span-1 transition-all ${isPlaying ? 'opacity-30 grayscale pointer-events-none' : ''}`}>
+                        <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={isPlaying} className="w-full h-full bg-slate-700 p-3 rounded-xl font-bold text-sm outline-none cursor-pointer">
+                          {[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} MIN</option>)}
+                        </select>
+                      </div>
+                      
                       <div className="col-span-2 md:col-span-1 flex gap-2">
                         {!isPlaying ? (<button onClick={startPractice} disabled={!isLoaded} className={`w-full rounded-xl font-black transition-all shadow-lg text-white text-lg ${isLoaded ? 'bg-blue-600 hover:bg-blue-500' : 'bg-slate-700 opacity-50'}`}>START</button>) : (
                           <div className="flex gap-2 w-full"><button onClick={isPaused ? resumePractice : pausePractice} className={`flex-[1.5] py-3 rounded-xl font-black ${isPaused ? 'bg-yellow-500 text-black' : 'bg-slate-700 text-white'}`}>{isPaused ? 'RESUME' : 'PAUSE'}</button><button onClick={stopPractice} className="flex-1 bg-red-500 py-3 rounded-xl font-black text-white text-[10px]">STOP</button></div>
