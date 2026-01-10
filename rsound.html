@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>기타 지판 연습기 - 자동 셔플 & 레이아웃 보정</title>
+    <title>기타 지판 연습기 - 미리보기 기능 추가</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -20,6 +20,7 @@
           const [selectedNote, setSelectedNote] = useState(() => baseNotes[Math.floor(Math.random() * baseNotes.length)]);
           const [accidental, setAccidental] = useState('');
           const [isRandomAccidental, setIsRandomAccidental] = useState(false);
+          const [isPreview, setIsPreview] = useState(true); // 미리보기 상태 추가
           const [bpm, setBpm] = useState(40);
           const [duration, setDuration] = useState(3);
           const [isPlaying, setIsPlaying] = useState(false);
@@ -150,7 +151,7 @@
             if (intervalRef.current) clearInterval(intervalRef.current);
             setIsPlaying(false); setIsPaused(false); setCurrentString(null); setCurrentFret(null);
             stopRequestedRef.current = false;
-            handleShuffle(); // 🔥 피니쉬/중단 후 자동으로 다음 음 랜덤 선택
+            handleShuffle(); 
           };
 
           const targetNoteDisplay = getTargetNoteName();
@@ -190,21 +191,30 @@
                         className={`rounded-xl text-[11px] font-black transition-all border py-3 ${isPlaying ? 'opacity-40' : 'opacity-100'} ${isRandomAccidental ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-600'}`}>
                         RAND<br/>ACC
                       </button>
+
+                      {/* 🔥 미리보기(PREV) 버튼 추가 */}
+                      <button onClick={() => setIsPreview(!isPreview)}
+                        className={`rounded-xl text-[11px] font-black transition-all border py-3 ${isPreview ? 'bg-blue-600 border-blue-400 text-white shadow-lg' : 'bg-slate-900 border-slate-700 text-slate-600'}`}>
+                        PREV<br/>{isPreview ? 'ON' : 'OFF'}
+                      </button>
+
                       <div className={`md:col-span-1 transition-opacity ${isPlaying ? 'opacity-40' : 'opacity-100'}`}>
                         <input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} disabled={isPlaying} className="w-full h-full bg-slate-900 p-3 rounded-xl text-center font-mono font-bold text-blue-400 border border-slate-700 outline-none" />
                       </div>
+
                       <div className={`md:col-span-1 transition-opacity ${isPlaying ? 'opacity-40' : 'opacity-100'}`}>
                         <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={isPlaying} className="w-full h-full bg-slate-700 p-3 rounded-xl font-bold text-sm outline-none cursor-pointer">
                           {[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} MIN</option>)}
                         </select>
                       </div>
-                      <div className="col-span-2 md:col-span-2 flex gap-2">
+
+                      <div className="col-span-2 md:col-span-1 flex gap-2">
                         {!isPlaying ? (
                           <button onClick={startPractice} disabled={!isLoaded} className={`w-full rounded-xl font-black transition-all shadow-lg text-white text-lg ${isLoaded ? 'bg-blue-600 hover:bg-blue-500' : 'bg-slate-700 opacity-50'}`}>START</button>
                         ) : (
                           <div className="flex gap-2 w-full">
-                            <button onClick={isPaused ? resumePractice : pausePractice} className={`flex-[1.5] py-3 rounded-xl font-black transition-all ${isPaused ? 'bg-yellow-500 text-black shadow-lg' : 'bg-slate-700 text-white'}`}>{isPaused ? 'RESUME' : 'PAUSE'}</button>
-                            <button onClick={stopPractice} className="flex-1 bg-red-500 py-3 rounded-xl font-black text-white text-sm">STOP</button>
+                            <button onClick={isPaused ? resumePractice : pausePractice} className={`flex-[1.5] py-3 rounded-xl font-black transition-all text-sm ${isPaused ? 'bg-yellow-500 text-black shadow-lg' : 'bg-slate-700 text-white'}`}>{isPaused ? 'RESUME' : 'PAUSE'}</button>
+                            <button onClick={stopPractice} className="flex-1 bg-red-500 py-3 rounded-xl font-black text-white text-[10px]">STOP</button>
                           </div>
                         )}
                       </div>
@@ -224,20 +234,21 @@
                     {[0, 1, 2, 3, 4, 5].map((stringIdx) => (
                       <div key={stringIdx} className="relative h-12 flex items-center">
                         <div className="w-6 text-[10px] font-bold text-slate-600 z-10">{stringIdx + 1}</div> 
-                        {/* 기타 줄 */}
                         <div className="flex-1 relative bg-slate-700/30 z-0" style={{ height: `${1 + stringIdx * 0.5}px` }}>
                           {[...Array(12)].map((_, idx) => {
                             const fret = idx + 1;
                             const isCurrent = currentString === stringIdx && currentFret === fret;
                             const noteName = getNoteFromFret(stringIdx, fret).slice(0,-1);
                             const isTarget = noteName === targetNoteDisplay || notesFlat[notes.indexOf(noteName)] === targetNoteDisplay;
+                            
+                            // 🔥 표시 로직: (미리보기 ON이거나 현재 연주 중인 경우) AND 타겟 노트인 경우
+                            const shouldShow = (isPreview || isCurrent) && isTarget;
+
                             return (
                               <div key={fret} className="absolute top-1/2" style={{left: `${(idx / 11) * 100}%`}}>
-                                {/* 프렛 세로줄 */}
                                 <div className="h-12 w-[1px] bg-slate-700/40 absolute top-[-24px] left-0 z-0"></div>
                                 
-                                {isTarget && (
-                                  /* 노란색 버튼 - z-index와 배경색으로 줄을 덮음 */
+                                {shouldShow && (
                                   <div className={`w-9 h-9 rounded-full flex items-center justify-center -translate-x-1/2 -translate-y-1/2 transition-all duration-150 z-20 
                                     ${isCurrent ? 'bg-yellow-400 text-black scale-110 font-black shadow-[0_0_15px_rgba(250,204,21,0.6)]' : 'bg-slate-800 text-slate-500/30 font-bold border border-slate-700'}`}>
                                     {fret}
@@ -250,7 +261,6 @@
                       </div>
                     ))}
                     
-                    {/* 프렛 번호 표시부 */}
                     <div className="flex ml-6 mt-4 border-t border-slate-700/50 pt-2 z-10 relative">
                       {[...Array(12)].map((_, i) => (
                         <div key={i} className="flex-1 text-center text-[10px] font-black text-slate-500" style={{marginLeft: i===0 ? '-18px' : '0'}}>
