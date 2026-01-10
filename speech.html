@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>기타 지판 연습기 - 셔플 아이콘 버전</title>
+    <title>기타 지판 연습기 - 셔플 위치 조정</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -170,12 +170,17 @@
                 
                 <div className="bg-slate-800 p-6 rounded-2xl shadow-2xl mb-8 grid grid-cols-1 md:grid-cols-4 gap-4 border border-slate-700">
                   <div className="md:col-span-1">
-                    <div className="flex flex-wrap gap-1 max-w-[200px]">
-                      {baseNotes.map(n => (
+                    <div className="grid grid-cols-5 gap-1 w-fit">
+                      {['C','D','E','F','G'].map(n => (
                         <button key={n} onClick={() => setSelectedNote(n)} 
                           className={`w-9 h-9 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
                       ))}
-                      {/* 🔥 화살표 아이콘 셔플 버튼 (G 버튼 다음 위치 유도) */}
+                      {['A','B'].map(n => (
+                        <button key={n} onClick={() => setSelectedNote(n)} 
+                          className={`w-9 h-9 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
+                      ))}
+                      <div className="w-9 h-9"></div>
+                      <div className="w-9 h-9"></div>
                       <button onClick={handleShuffle} 
                         className="w-9 h-9 rounded-lg flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 transition-all shadow-lg active:scale-95"
                         title="Random Note">
