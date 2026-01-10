@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>기타 지판 연습기 - 미리보기 기능 추가</title>
+    <title>기타 지판 연습기 - 집중 모드 UI</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -20,7 +20,7 @@
           const [selectedNote, setSelectedNote] = useState(() => baseNotes[Math.floor(Math.random() * baseNotes.length)]);
           const [accidental, setAccidental] = useState('');
           const [isRandomAccidental, setIsRandomAccidental] = useState(false);
-          const [isPreview, setIsPreview] = useState(true); // 미리보기 상태 추가
+          const [isPreview, setIsPreview] = useState(true);
           const [bpm, setBpm] = useState(40);
           const [duration, setDuration] = useState(3);
           const [isPlaying, setIsPlaying] = useState(false);
@@ -192,7 +192,6 @@
                         RAND<br/>ACC
                       </button>
 
-                      {/* 🔥 미리보기(PREV) 버튼 추가 */}
                       <button onClick={() => setIsPreview(!isPreview)}
                         className={`rounded-xl text-[11px] font-black transition-all border py-3 ${isPreview ? 'bg-blue-600 border-blue-400 text-white shadow-lg' : 'bg-slate-900 border-slate-700 text-slate-600'}`}>
                         PREV<br/>{isPreview ? 'ON' : 'OFF'}
@@ -240,14 +239,11 @@
                             const isCurrent = currentString === stringIdx && currentFret === fret;
                             const noteName = getNoteFromFret(stringIdx, fret).slice(0,-1);
                             const isTarget = noteName === targetNoteDisplay || notesFlat[notes.indexOf(noteName)] === targetNoteDisplay;
-                            
-                            // 🔥 표시 로직: (미리보기 ON이거나 현재 연주 중인 경우) AND 타겟 노트인 경우
                             const shouldShow = (isPreview || isCurrent) && isTarget;
 
                             return (
                               <div key={fret} className="absolute top-1/2" style={{left: `${(idx / 11) * 100}%`}}>
                                 <div className="h-12 w-[1px] bg-slate-700/40 absolute top-[-24px] left-0 z-0"></div>
-                                
                                 {shouldShow && (
                                   <div className={`w-9 h-9 rounded-full flex items-center justify-center -translate-x-1/2 -translate-y-1/2 transition-all duration-150 z-20 
                                     ${isCurrent ? 'bg-yellow-400 text-black scale-110 font-black shadow-[0_0_15px_rgba(250,204,21,0.6)]' : 'bg-slate-800 text-slate-500/30 font-bold border border-slate-700'}`}>
@@ -271,10 +267,15 @@
                   </div>
                 </div>
                 
+                {/* 하단 음 이름 표시부 - 플레이 상태에 따라 텍스트 변화 */}
                 <div className="mt-8 text-center">
-                    <div className="inline-flex items-center gap-4 bg-slate-800/80 px-8 py-3 rounded-2xl border border-slate-700 shadow-xl">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Next Target</span>
-                        <span className="text-4xl font-black text-blue-400 drop-shadow-[0_0_10px_rgba(96,165,250,0.5)]">{selectedNote}{accidental}</span>
+                    <div className="inline-flex items-center gap-4 bg-slate-800/80 px-8 py-3 rounded-2xl border border-slate-700 shadow-xl transition-all">
+                        {!isPlaying && (
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest animate-pulse">Next Target</span>
+                        )}
+                        <span className={`font-black text-blue-400 drop-shadow-[0_0_10px_rgba(96,165,250,0.5)] transition-all ${isPlaying ? 'text-6xl px-4' : 'text-4xl'}`}>
+                            {selectedNote}{accidental}
+                        </span>
                     </div>
                 </div>
               </div>
