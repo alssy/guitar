@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>기타 지판 연습기 - 셔플 위치 조정</title>
+    <title>기타 지판 연습기 - 커스텀 디폴트 버전</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -16,10 +16,14 @@
         const { useState, useEffect, useRef } = React;
 
         const GuitarFretboardTrainer = () => {
-          const [selectedNote, setSelectedNote] = useState('C');
+          const baseNotes = ['C','D','E','F','G','A','B'];
+          
+          // 🔥 초기값 설정: 시작 시 랜덤 음 선택, BPM 40, 시간 3분
+          const [selectedNote, setSelectedNote] = useState(() => baseNotes[Math.floor(Math.random() * baseNotes.length)]);
           const [accidental, setAccidental] = useState('');
           const [bpm, setBpm] = useState(40);
           const [duration, setDuration] = useState(3);
+          
           const [isPlaying, setIsPlaying] = useState(false);
           const [currentString, setCurrentString] = useState(null);
           const [currentFret, setCurrentFret] = useState(null);
@@ -36,7 +40,6 @@
           const stringNotes = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2']; 
           const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
           const notesFlat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
-          const baseNotes = ['C','D','E','F','G','A','B'];
 
           useEffect(() => {
             synthRef.current = new Tone.PolySynth(Tone.Synth, {
