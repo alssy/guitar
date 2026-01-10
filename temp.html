@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>기타 지판 연습기 - 포즈 기능 및 레이아웃 복구</title>
+    <title>기타 지판 연습기 - 레이아웃 최적화</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -171,53 +171,62 @@
             <div className="min-h-screen text-white p-4 md:p-8 font-sans touch-none">
               <div className="max-w-5xl mx-auto">
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-xl font-black text-slate-500 italic uppercase">Fretboard Trainer</h1>
+                    <h1 className="text-xl font-black text-slate-500 italic uppercase tracking-tighter">Fretboard Trainer</h1>
                     {isPlaying && (
-                        <div className="bg-slate-800 px-4 py-1 rounded-full border border-slate-700 font-mono text-xl font-bold text-blue-400">
+                        <div className="bg-slate-800 px-4 py-1 rounded-full border border-slate-700 font-mono text-xl font-bold text-blue-400 shadow-lg shadow-blue-500/10">
                             {stopRequestedRef.current ? "FINISHING..." : `${Math.floor(timeRemaining / 60)}:${String(timeRemaining % 60).padStart(2, '0')}`}
                         </div>
                     )}
                 </div>
                 
                 <div className="bg-slate-800 p-6 rounded-2xl shadow-2xl mb-8 grid grid-cols-1 md:grid-cols-4 gap-4 border border-slate-700">
-                  <div className="md:col-span-1">
-                    {/* 🔥 레이아웃 복구: 5열 그리드 */}
-                    <div className="grid grid-cols-5 gap-1 w-fit">
+                  <div className="md:col-span-2">
+                    {/* 🔥 5열 그리드: C D E F G / A B # b Shuffle */}
+                    <div className="grid grid-cols-5 gap-1.5 w-fit">
+                      {/* 첫 줄 */}
                       {['C','D','E','F','G'].map(n => (
                         <button key={n} onClick={() => setSelectedNote(n)} 
-                          className={`w-9 h-9 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
+                          className={`w-10 h-10 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
                       ))}
+                      
+                      {/* 둘째 줄 */}
                       {['A','B'].map(n => (
                         <button key={n} onClick={() => setSelectedNote(n)} 
-                          className={`w-9 h-9 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
+                          className={`w-10 h-10 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
                       ))}
-                      <div className="w-9 h-9"></div>
-                      <div className="w-9 h-9"></div>
+                      
+                      {/* 이동된 # 버튼 */}
+                      <button onClick={() => setAccidental(accidental === '#' ? '' : '#')} 
+                        className={`w-10 h-10 rounded-lg font-bold transition-all ${accidental === '#' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}>#</button>
+                      
+                      {/* 이동된 b 버튼 */}
+                      <button onClick={() => setAccidental(accidental === 'b' ? '' : 'b')} 
+                        className={`w-10 h-10 rounded-lg font-bold transition-all ${accidental === 'b' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}>♭</button>
+                      
+                      {/* 셔플 버튼 */}
                       <button onClick={handleShuffle} 
-                        className="w-9 h-9 rounded-lg flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 transition-all shadow-lg active:scale-95">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                        className="w-10 h-10 rounded-lg flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 transition-all shadow-lg active:scale-95">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
                       </button>
                     </div>
                   </div>
+
                   <div className="flex gap-2">
-                    <button onClick={() => setAccidental(accidental === '#' ? '' : '#')} className={`flex-1 rounded-lg font-bold transition ${accidental === '#' ? 'bg-green-600' : 'bg-slate-700'}`}>#</button>
-                    <button onClick={() => setAccidental(accidental === 'b' ? '' : 'b')} className={`flex-1 rounded-lg font-bold transition ${accidental === 'b' ? 'bg-green-600' : 'bg-slate-700'}`}>♭</button>
-                  </div>
-                  <div className="flex gap-2">
-                    <input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-1/2 bg-slate-900 p-2 rounded-lg text-center font-mono font-bold text-blue-400 border border-slate-700 outline-none" />
-                    <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="w-1/2 bg-slate-700 p-2 rounded-lg font-bold text-xs outline-none">
+                    <input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} className="w-1/2 bg-slate-900 p-2 rounded-lg text-center font-mono font-bold text-blue-400 border border-slate-700 outline-none focus:border-blue-500 transition-colors" />
+                    <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="w-1/2 bg-slate-700 p-2 rounded-lg font-bold text-xs outline-none cursor-pointer">
                       {[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} MIN</option>)}
                     </select>
                   </div>
+
                   <div className="flex gap-2">
                     {!isPlaying ? (
-                      <button onClick={startPractice} className="flex-1 bg-blue-600 py-3 rounded-xl font-black hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/20 text-sm">START</button>
+                      <button onClick={startPractice} className="flex-1 bg-blue-600 py-3 rounded-xl font-black hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/20">START</button>
                     ) : (
                       <>
-                        <button onClick={isPaused ? resumePractice : pausePractice} className={`flex-[2] py-3 rounded-xl font-black transition-all text-sm ${isPaused ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'bg-slate-700 text-white'}`}>
+                        <button onClick={isPaused ? resumePractice : pausePractice} className={`flex-[2] py-3 rounded-xl font-black transition-all ${isPaused ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'bg-slate-700 text-white'}`}>
                           {isPaused ? 'RESUME' : 'PAUSE'}
                         </button>
-                        <button onClick={stopPractice} className="flex-1 bg-red-500 py-3 rounded-xl font-black hover:bg-red-400 transition-all shadow-lg shadow-red-900/20 text-sm">STOP</button>
+                        <button onClick={stopPractice} className="flex-1 bg-red-500 py-3 rounded-xl font-black hover:bg-red-400 transition-all shadow-lg shadow-red-900/20">STOP</button>
                       </>
                     )}
                   </div>
