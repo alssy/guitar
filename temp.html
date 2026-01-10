@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>기타 지판 연습기 - 포즈 기능 추가</title>
+    <title>기타 지판 연습기 - 포즈 기능 및 레이아웃 복구</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -24,7 +24,7 @@
           const [duration, setDuration] = useState(3);
           
           const [isPlaying, setIsPlaying] = useState(false);
-          const [isPaused, setIsPaused] = useState(false); // 🔥 일시정지 상태 추가
+          const [isPaused, setIsPaused] = useState(false);
           const [currentString, setCurrentString] = useState(null);
           const [currentFret, setCurrentFret] = useState(null);
           const [timeRemaining, setTimeRemaining] = useState(0);
@@ -80,11 +80,10 @@
           };
 
           const startPractice = async () => {
-            if (isPaused) { // 🔥 일시정지 중이면 다시 시작
+            if (isPaused) {
               resumePractice();
               return;
             }
-
             await Tone.start();
             setIsPlaying(true);
             setIsPaused(false);
@@ -128,14 +127,12 @@
             Tone.Transport.start();
           };
 
-          // 🔥 일시정지 로직
           const pausePractice = () => {
             Tone.Transport.pause();
             if (intervalRef.current) clearInterval(intervalRef.current);
             setIsPaused(true);
           };
 
-          // 🔥 재개 로직
           const resumePractice = () => {
             Tone.Transport.start();
             startTimer();
@@ -184,13 +181,22 @@
                 
                 <div className="bg-slate-800 p-6 rounded-2xl shadow-2xl mb-8 grid grid-cols-1 md:grid-cols-4 gap-4 border border-slate-700">
                   <div className="md:col-span-1">
+                    {/* 🔥 레이아웃 복구: 5열 그리드 */}
                     <div className="grid grid-cols-5 gap-1 w-fit">
-                      {['C','D','E','F','G','A','B'].reduce((acc, n, i) => {
-                          acc.push(<button key={n} onClick={() => setSelectedNote(n)} className={`w-9 h-9 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>);
-                          if(i === 4) acc.push(<div key="space1" className="w-9 h-9"></div>, <div key="space2" className="w-9 h-9"></div>);
-                          return acc;
-                      }, [])}
-                      <button onClick={handleShuffle} className="w-9 h-9 rounded-lg flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 transition-all shadow-lg active:scale-95"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></button>
+                      {['C','D','E','F','G'].map(n => (
+                        <button key={n} onClick={() => setSelectedNote(n)} 
+                          className={`w-9 h-9 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
+                      ))}
+                      {['A','B'].map(n => (
+                        <button key={n} onClick={() => setSelectedNote(n)} 
+                          className={`w-9 h-9 rounded-lg font-bold transition-all ${selectedNote === n ? 'bg-blue-600 text-white ring-2 ring-blue-400' : 'bg-slate-700 hover:bg-slate-600'}`}>{n}</button>
+                      ))}
+                      <div className="w-9 h-9"></div>
+                      <div className="w-9 h-9"></div>
+                      <button onClick={handleShuffle} 
+                        className="w-9 h-9 rounded-lg flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 transition-all shadow-lg active:scale-95">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                      </button>
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -203,30 +209,24 @@
                       {[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} MIN</option>)}
                     </select>
                   </div>
-                  
-                  {/* 🔥 버튼 섹션 변경 */}
                   <div className="flex gap-2">
                     {!isPlaying ? (
-                      <button onClick={startPractice} className="flex-1 bg-blue-600 py-3 rounded-xl font-black hover:bg-blue-500 transition-all">START</button>
+                      <button onClick={startPractice} className="flex-1 bg-blue-600 py-3 rounded-xl font-black hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/20 text-sm">START</button>
                     ) : (
                       <>
-                        <button 
-                          onClick={isPaused ? resumePractice : pausePractice} 
-                          className={`flex-[2] py-3 rounded-xl font-black transition-all ${isPaused ? 'bg-yellow-500 text-black' : 'bg-slate-600 text-white'}`}>
+                        <button onClick={isPaused ? resumePractice : pausePractice} className={`flex-[2] py-3 rounded-xl font-black transition-all text-sm ${isPaused ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'bg-slate-700 text-white'}`}>
                           {isPaused ? 'RESUME' : 'PAUSE'}
                         </button>
-                        <button onClick={stopPractice} className="flex-1 bg-red-500 py-3 rounded-xl font-black hover:bg-red-400 transition-all">STOP</button>
+                        <button onClick={stopPractice} className="flex-1 bg-red-500 py-3 rounded-xl font-black hover:bg-red-400 transition-all shadow-lg shadow-red-900/20 text-sm">STOP</button>
                       </>
                     )}
                   </div>
                 </div>
 
-                {/* 지판 렌더링 부분 (기존과 동일) */}
                 <div className="bg-slate-800 p-6 md:p-10 rounded-3xl border border-slate-700 shadow-inner overflow-x-auto relative">
-                  {/* 일시정지 오버레이 */}
                   {isPaused && (
                     <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] z-20 flex items-center justify-center rounded-3xl">
-                        <span className="text-4xl font-black text-yellow-500 tracking-widest animate-pulse">PAUSED</span>
+                        <span className="text-4xl font-black text-yellow-500 tracking-widest animate-pulse italic">PAUSED</span>
                     </div>
                   )}
                   <div className="min-w-[800px]">
