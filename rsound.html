@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>기타 지판 연습기 - 스마트 랜덤 초기화</title>
+    <title>기타 지판 연습기 - 리얼 메트로놈 사운드</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -37,7 +37,7 @@
           const [isLoaded, setIsLoaded] = useState(false);
           
           const samplerRef = useRef(null);
-          const stickRef = useRef(null);
+          const metronomeRef = useRef(null); // 🔥 메트로놈 신디사이저
           const loopRef = useRef(null);
           const beatCountRef = useRef(0);
           const intervalRef = useRef(null);
@@ -74,10 +74,21 @@
               onload: () => setIsLoaded(true)
             }).toDestination();
             samplerRef.current.release = 0.4;
-            stickRef.current = new Tone.MembraneSynth({
-              pitchDecay: 0.001, octaves: 0.1, envelope: { attack: 0.0001, decay: 0.05, sustain: 0 }
+
+            // 🔥 수동 메트로놈 느낌의 타격음 설정
+            metronomeRef.current = new Tone.MembraneSynth({
+              pitchDecay: 0.008,
+              octaves: 2,
+              envelope: {
+                attack: 0.0001,
+                decay: 0.1,
+                sustain: 0,
+                release: 0.1
+              }
             }).toDestination();
-            return () => { stopPractice(); samplerRef.current?.dispose(); stickRef.current?.dispose(); };
+            metronomeRef.current.volume.value = -6; // 너무 크지 않게 조절
+
+            return () => { stopPractice(); samplerRef.current?.dispose(); metronomeRef.current?.dispose(); };
           }, []);
 
           const isSharpDisabled = (note) => note === 'E' || note === 'B';
@@ -107,14 +118,11 @@
             setAccidental(nextAcc);
           };
 
-          // 🔥 랜덤 버튼 클릭 시 변화표 초기화 로직 추가
           const toggleRandomAccidental = () => {
             if (isPlaying) return;
             const nextState = !isRandomAccidental;
             setIsRandomAccidental(nextState);
-            if (!nextState) {
-              setAccidental(''); // 랜덤을 끌 때 샵/플랫 초기화
-            }
+            if (!nextState) setAccidental('');
           };
 
           const getNoteFromFret = (stringIndex, fret) => {
@@ -140,7 +148,14 @@
 
             loopRef.current = new Tone.Loop((time) => {
               beatCountRef.current++;
-              if (beatCountRef.current <= 4) { stickRef.current.triggerAttackRelease('A5', '32n', time, 1.0); return; }
+              
+              // 🔥 수동 메트로놈 소리 로직
+              // 1박자는 조금 더 높은 '딱', 나머지는 '똑'
+              const isFirstBeat = (beatCountRef.current % 4 === 1);
+              metronomeRef.current.triggerAttackRelease(isFirstBeat ? 'C6' : 'C5', '32n', time);
+
+              // 4박 카운트다운 이후 타이머 시작
+              if (beatCountRef.current <= 4) return;
               if (beatCountRef.current === 5) Tone.Draw.schedule(() => startTimer(), time);
               
               const currentStringNum = stringPattern[patternStep];
@@ -241,9 +256,7 @@
                       </div>
                     </div>
                     <div className="md:col-span-9 grid grid-cols-2 md:grid-cols-5 gap-3">
-                      {/* 🔥 수정된 토글 함수 연결 */}
                       <button onClick={toggleRandomAccidental} disabled={isPlaying} className={`rounded-xl text-[11px] font-black border py-3 transition-all ${isPlaying ? 'opacity-30 grayscale' : 'opacity-100'} ${isRandomAccidental ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-600'}`}>RAND<br/>ACC</button>
-                      
                       <button onClick={() => setIsPreview(!isPreview)} className={`rounded-xl text-[11px] font-black border py-3 transition-all ${isPreview ? 'bg-blue-600 border-blue-400 text-white shadow-lg' : 'bg-slate-900 border-slate-700 text-slate-600'}`}>PREV<br/>{isPreview ? 'ON' : 'OFF'}</button>
                       <div className={`md:col-span-1 transition-all ${isPlaying ? 'opacity-30 grayscale pointer-events-none' : ''}`}><input type="number" value={bpm} onChange={(e) => setBpm(Number(e.target.value))} disabled={isPlaying} className="w-full h-full bg-slate-900 p-3 rounded-xl text-center font-mono font-bold text-blue-400 border border-slate-700 outline-none" /></div>
                       <div className={`md:col-span-1 transition-all ${isPlaying ? 'opacity-30 grayscale pointer-events-none' : ''}`}><select value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={isPlaying} className="w-full h-full bg-slate-700 p-3 rounded-xl font-bold text-sm outline-none cursor-pointer">{[1,2,3,4,5,10].map(m => <option key={m} value={m}>{m} MIN</option>)}</select></div>
