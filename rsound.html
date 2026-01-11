@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>기타 지판 연습기 - 리얼 메트로놈 사운드</title>
+    <title>기타 지판 연습기 - 카운트다운 전용 메트로놈</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -37,7 +37,7 @@
           const [isLoaded, setIsLoaded] = useState(false);
           
           const samplerRef = useRef(null);
-          const metronomeRef = useRef(null); // 🔥 메트로놈 신디사이저
+          const metronomeRef = useRef(null);
           const loopRef = useRef(null);
           const beatCountRef = useRef(0);
           const intervalRef = useRef(null);
@@ -75,18 +75,12 @@
             }).toDestination();
             samplerRef.current.release = 0.4;
 
-            // 🔥 수동 메트로놈 느낌의 타격음 설정
             metronomeRef.current = new Tone.MembraneSynth({
               pitchDecay: 0.008,
               octaves: 2,
-              envelope: {
-                attack: 0.0001,
-                decay: 0.1,
-                sustain: 0,
-                release: 0.1
-              }
+              envelope: { attack: 0.0001, decay: 0.1, sustain: 0, release: 0.1 }
             }).toDestination();
-            metronomeRef.current.volume.value = -6; // 너무 크지 않게 조절
+            metronomeRef.current.volume.value = -6;
 
             return () => { stopPractice(); samplerRef.current?.dispose(); metronomeRef.current?.dispose(); };
           }, []);
@@ -149,13 +143,13 @@
             loopRef.current = new Tone.Loop((time) => {
               beatCountRef.current++;
               
-              // 🔥 수동 메트로놈 소리 로직
-              // 1박자는 조금 더 높은 '딱', 나머지는 '똑'
-              const isFirstBeat = (beatCountRef.current % 4 === 1);
-              metronomeRef.current.triggerAttackRelease(isFirstBeat ? 'C6' : 'C5', '32n', time);
+              // 🔥 메트로놈 재생 로직: 시작 전 4박자만 소리 재생
+              if (beatCountRef.current <= 4) {
+                metronomeRef.current.triggerAttackRelease('C5', '32n', time);
+                return; // 카운트다운 중에는 기타 소리를 내지 않음
+              }
 
-              // 4박 카운트다운 이후 타이머 시작
-              if (beatCountRef.current <= 4) return;
+              // 본 연습 시작 (5박자부터)
               if (beatCountRef.current === 5) Tone.Draw.schedule(() => startTimer(), time);
               
               const currentStringNum = stringPattern[patternStep];
